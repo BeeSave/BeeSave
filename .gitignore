@@ -1,0 +1,10 @@
+.build/
+build/
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+Dist/*.zip
+Dist/*.sha256
+Dist/*.json
+Verification/*.log
