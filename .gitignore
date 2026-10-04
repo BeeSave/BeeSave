@@ -1,0 +1,23 @@
+.build/
+build/
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+Dist/*.zip
+Dist/*.sha256
+Dist/*.json
+Dist/*.dmg
+Dist/*.xml
+Verification/*.log
+
+# Local development documents and design drafts
+/AGENTS.md
+/SPEC.md
+/PLAN.md
+/ACCEPTANCE.md
+/BeeSave APP.md
+/RELEASES.md
+/specs/
+/Verification/
+/Design/
