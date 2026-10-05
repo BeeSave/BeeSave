@@ -64,7 +64,7 @@ public struct Report: Codable, Identifiable, Equatable, Sendable {
 public struct DashboardBlock: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID(); public var kind: String; public var reportID: UUID?; public var visible = true; public var wide = false; public var ownFilters: Filters?
     public init(kind: String, reportID: UUID? = nil) { self.kind = kind; self.reportID = reportID }
-    public static var defaults: [DashboardBlock] { ["balances", "flows", "trend", "categories", "monthly", "projects", "outside"].map { var b = DashboardBlock(kind: $0); b.wide = ["balances", "flows", "trend"].contains($0); return b } }
+    public static var defaults: [DashboardBlock] { ["balances", "flows", "trend", "categories", "monthly", "projects", "outside"].map { var b = DashboardBlock(kind: $0); b.wide = false; return b } }
 }
 public struct ImportBatch: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID(); public var date = Date(); public var fingerprint: String; public var added: [UUID]; public var skipped: Int; public var excluded: Int

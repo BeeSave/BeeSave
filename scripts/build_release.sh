@@ -13,4 +13,8 @@ version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/C
 archive="$project_dir/Dist/BeeSave-${version}-arm64.zip"
 ditto -c -k --norsrc --keepParent "$app" "$archive"
 (cd "$project_dir/Dist" && shasum -a 256 "${archive:t}" > "${archive:t}.sha256")
+cp "$archive" "$project_dir/Dist/BeeSave-macos-arm64.zip"
+(cd "$project_dir/Dist" && shasum -a 256 BeeSave-macos-arm64.zip > BeeSave-macos-arm64.zip.sha256)
+python3 "$project_dir/scripts/generate_update_manifest.py" "$app" "$archive" "$project_dir/Dist/latest.json"
 print "Архив: $archive"
+print "Вложения GitHub Release: BeeSave-macos-arm64.zip, BeeSave-macos-arm64.zip.sha256, latest.json"
