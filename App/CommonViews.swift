@@ -1,54 +1,116 @@
 import SwiftUI
 import BudgetCore
+import BudgetPresentation
 
 struct CurrencyPicker: View {
-    var title: String; @Binding var selection: String; @State private var search = ""
-    var body: some View { HStack { Picker(title, selection: $selection) { ForEach(Currency.catalog.filter { search.isEmpty || $0.label.localizedCaseInsensitiveContains(search) || $0.code == selection }) { c in Text(c.label).tag(c.code) } }.frame(minWidth: 180); TextField("Поиск валюты", text: $search).frame(width: 130) } }
-}
-struct DayField: View {
-    var title: String; @Binding var value: String
-    var body: some View { TextField(title + " (YYYY-MM-DD)", text: $value).textFieldStyle(.roundedBorder) }
-}
-struct EditorFrame<Content: View>: View {
-    var title: String; var saveTitle = "Сохранить"; var canSave = true; var save: () throws -> Void; @ViewBuilder var content: () -> Content
-    @Environment(\.dismiss) var dismiss; @EnvironmentObject var model: AppModel; @State private var error = ""; @State private var discard = false
+    var title: String
+    @Binding var selection: String
+    var compact = false
+    @State private var search = ""
+    @State private var open = false
     var body: some View {
-        VStack(spacing: 0) {
-            HStack { Text(title).font(.title2.bold()); Spacer() }.padding(24)
-            ScrollView { VStack(alignment: .leading, spacing: 16) { content(); if !error.isEmpty { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) } }.padding(.horizontal, 24).padding(.bottom, 24) }
-            Divider(); HStack { Text("При блокировке несохранённая форма закроется.").font(.caption).foregroundStyle(.secondary); Spacer(); Button("Отмена") { discard = true }.keyboardShortcut(.cancelAction); Button(saveTitle) { do { try save(); dismiss() } catch { self.error = error.localizedDescription } }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(!canSave || model.busy) }.padding(20)
-        }.frame(width: 650, height: 650).interactiveDismissDisabled()
-        .confirmationDialog("Сохранить изменения перед закрытием?", isPresented: $discard) { Button("Сохранить") { do { try save(); dismiss() } catch { self.error = error.localizedDescription } }; Button("Отказаться", role: .destructive) { dismiss() }; Button("Продолжить редактирование", role: .cancel) {} }
+        Group { if compact { HStack(spacing: 7) { Text(title).font(.caption); pickerButton } } else { FormField(title: title) { pickerButton } } }
+    }
+    private var pickerButton: some View {
+            Button { search = ""; open = true } label: {
+                HStack { Text(compact ? selection : ((try? Currency.get(selection).label) ?? selection)); if !compact { Spacer() }; Image(systemName: "chevron.down") }
+            }.buttonStyle(.bordered).popover(isPresented: $open) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(title).font(.headline)
+                    TextField("Найти валюту", text: $search).textFieldStyle(.roundedBorder)
+                    ScrollView { LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(Currency.catalog.filter { search.isEmpty || $0.label.localizedCaseInsensitiveContains(search) }) { currency in
+                            Button { selection = currency.code; open = false } label: { HStack { Text(currency.label); Spacer(); if selection == currency.code { Image(systemName: "checkmark") } } }.buttonStyle(.plain).padding(7)
+                        }
+                    } }.frame(height: 260)
+                    Button("Отмена") { open = false }.keyboardShortcut(.cancelAction)
+                }.padding(18).frame(width: 330).foregroundStyle(BeeStyle.text).background(BeeStyle.surface)
+            }
     }
 }
-struct FilterBar: View {
-    @EnvironmentObject var model: AppModel; @Binding var filters: Filters; var showParticipation = true; var allowCategoryProject = true
-    @State private var start = ""; @State private var end = ""
-    var body: some View { VStack(alignment: .leading, spacing: 8) {
-        HStack {
-            TextField("От YYYY-MM-DD", text: $start).frame(width: 135).onSubmit(applyDates)
-            TextField("До YYYY-MM-DD", text: $end).frame(width: 135).onSubmit(applyDates)
-            Button("Применить даты", action: applyDates)
-            Button("Этот месяц") { filters.start = .today.firstOfMonth; filters.end = .today; syncDates() }
-            Spacer(); Toggle("Архивные счета", isOn: $filters.includeArchived).toggleStyle(.checkbox)
+
+struct DayField: View {
+    var title: String
+    @Binding var value: String
+    var body: some View {
+        FormField(title: title) {
+            DatePicker(title, selection: Binding(get: { CalendarDays.localDate((try? Day(value)) ?? .today) }, set: { value = CalendarDays.day($0).rawValue }), displayedComponents: .date)
+                .labelsHidden().datePickerStyle(.field).environment(\.locale, Locale(identifier: "ru_RU"))
         }
-        HStack {
-            Menu("Счета: \(filters.accounts.isEmpty ? "все" : String(filters.accounts.count))") { ForEach(model.db?.accounts ?? []) { a in Toggle(a.name, isOn: Binding(get: { filters.accounts.contains(a.id) }, set: { if $0 { filters.accounts.insert(a.id) } else { filters.accounts.remove(a.id) } })) }; Button("Все счета") { filters.accounts = [] } }
-            if allowCategoryProject {
-                Menu("Категории: \(filters.categories.isEmpty ? "все" : String(filters.categories.count))") { ForEach(model.db?.categories ?? []) { c in Toggle((model.db?.categoryPath(c.id) ?? c.name) + (c.kind == .income ? " · доход" : ""), isOn: Binding(get: { filters.categories.contains(c.id) }, set: { if $0 { filters.categories.insert(c.id) } else { filters.categories.remove(c.id) } })) }; Button("Все категории") { filters.categories = [] } }
-                Picker("Проект", selection: $filters.projectID) { Text("Все").tag(nil as UUID?); ForEach(model.db?.projects ?? []) { Text($0.name).tag(Optional($0.id)) } }.frame(maxWidth: 200)
+    }
+}
+
+struct EditorFrame<Content: View>: View {
+    var title: String
+    var saveTitle = "Сохранить"
+    var canSave = true
+    var isDirty = true
+    var width: CGFloat = 580
+    var height: CGFloat = 590
+    var onError: (String) -> Void = { _ in }
+    var saveAsync: (() async throws -> Void)? = nil
+    var save: () throws -> Void
+    @ViewBuilder var content: () -> Content
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var model: AppModel
+    @State private var error = ""
+    @State private var discard = false
+    @State private var submitting = false
+    @State private var submitTask: Task<Void, Never>?
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack { Text(title).font(.title2.weight(.semibold)); Spacer() }.padding(24)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    content()
+                    if !error.isEmpty { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(BeeStyle.negative) }
+                }.padding(.horizontal, 24).padding(.bottom, 20).frame(maxWidth: .infinity, alignment: .leading)
             }
-            Picker("Исходная валюта", selection: $filters.currency) { Text("Все").tag(nil as String?); ForEach(Currency.catalog) { Text($0.code).tag(Optional($0.code)) } }.frame(maxWidth: 190)
-            if showParticipation { Picker("Бюджет", selection: $filters.participation) { Text("Все").tag(Participation.all); Text("Вне бюджетов").tag(Participation.outside); Text("Без месячного").tag(Participation.noMonthly); Text("Без проектного").tag(Participation.noProject) }.frame(maxWidth: 210) }
-        }.controlSize(.small)
-    }.textFieldStyle(.roundedBorder).onAppear(perform: syncDates).onChange(of: filters.start) { syncDates() }.onChange(of: filters.end) { syncDates() } }
-    func syncDates() { start = filters.start?.rawValue ?? ""; end = filters.end?.rawValue ?? "" }
-    func applyDates() { do { let s = start.isEmpty ? nil : try Day(start); let e = end.isEmpty ? nil : try Day(end); guard s == nil || e == nil || s! <= e! else { throw BudgetError.invalid("Начало периода позже конца.") }; filters.start = s; filters.end = e } catch { model.error = error.localizedDescription } }
+            Divider()
+            HStack {
+                if isDirty { Text("При блокировке незавершённая форма закроется.").font(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true) }
+                Spacer()
+                Button("Отмена") { if isDirty { discard = true } else { dismiss() } }.keyboardShortcut(.cancelAction)
+                Button(saveTitle, action: submit).buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(!canSave || model.busy || submitting)
+            }.padding(20)
+        }.frame(width: width, height: height).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.honey)
+            .interactiveDismissDisabled(isDirty)
+            .onDisappear { submitTask?.cancel() }
+            .confirmationDialog("Сохранить изменения перед закрытием?", isPresented: $discard) {
+                Button("Сохранить", action: submit).disabled(!canSave || model.busy || submitting)
+                Button("Отказаться", role: .destructive) { dismiss() }
+                Button("Продолжить редактирование", role: .cancel) {}
+            }
+    }
+    private func submit() {
+        guard !submitting else { return }
+        if let saveAsync { submitting = true; submitTask = Task { do { try await saveAsync(); try Task.checkCancellation(); submitting = false; dismiss() } catch { submitting = false; self.error = error.localizedDescription; onError(self.error) } } }
+        else { do { try save(); dismiss() } catch { self.error = error.localizedDescription; onError(self.error) } }
+    }
 }
-func confirmDeletion(_ name: String, consequence: String) -> Bool {
-    let a = NSAlert(); a.messageText = "Удалить «\(name)»?"; a.informativeText = consequence; a.addButton(withTitle: "Удалить"); a.addButton(withTitle: "Отмена"); return a.runModal() == .alertFirstButtonReturn
-}
+
 struct EmptyState: View {
-    var title: String; var detail: String; var icon = "tray"
-    var body: some View { ContentUnavailableView(title, systemImage: icon, description: Text(detail)).frame(maxWidth: .infinity, minHeight: 150) }
+    var title: String
+    var detail: String
+    var icon = "tray"
+    var body: some View { VStack(spacing: 12) { Image(systemName: icon).font(.title2); Text(title).font(.headline); Text(detail).font(.subheadline).foregroundStyle(BeeStyle.muted).multilineTextAlignment(.center) }.frame(maxWidth: .infinity).padding(24) }
+}
+
+func confirmDeletion(_ name: String, consequence: String) -> Bool {
+    let alert = NSAlert(); alert.messageText = name; alert.informativeText = consequence
+    alert.addButton(withTitle: "Продолжить"); alert.addButton(withTitle: "Отмена")
+    return alert.runModal() == .alertFirstButtonReturn
+}
+
+struct OperationDetailContext: Identifiable {
+    var id = UUID()
+    var title: String
+    var accountID: UUID?
+    var ids: [UUID]?
+    var filters = Filters()
+}
+struct OperationDetailSheet: View {
+    var context: OperationDetailContext
+    @Environment(\.dismiss) private var dismiss
+    var body: some View { VStack(spacing: 0) { HStack { Text(context.title).font(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() }.keyboardShortcut(.cancelAction) }.padding(22); OperationsView(accountID: context.accountID, ids: context.ids, initialFilters: context.filters) }.frame(width: 960, height: 640).beeWindow() }
 }
