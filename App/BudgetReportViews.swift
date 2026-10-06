@@ -98,8 +98,10 @@ struct MonthField: View {
 }
 private extension DateFormatter { static var monthNames: [String] { let formatter = DateFormatter(); formatter.locale = Locale(identifier: "ru_RU"); return formatter.standaloneMonthSymbols.map(\.capitalized) } }
 
-extension Dataset { var title: String { self == .flows ? "Доходы / расходы" : "Остатки" } }
-extension Metric { var title: String { switch self { case .income: "Сумма доходов"; case .expense: "Сумма расходов"; case .net: "Доходы минус расходы"; case .count: "Количество операций"; case .balance: "Остаток" } } }
+extension Dataset { var title: String { switch self { case .flows: "Доходы / расходы"; case .balances: "Остатки"; case .debt: "Задолженность · факт"; case .financialPlan: "Обязательства · прогноз"; case .depositYield: "Доход депозита · прогноз" } }
+    var metrics: [Metric] { switch self { case .flows: [.income, .expense, .net, .count]; case .balances: [.balance]; case .debt: [.balance, .principal, .interest, .fees]; case .financialPlan: [.payment, .grace]; case .depositYield: [.yield, .netYield] } }
+}
+extension Metric { var title: String { switch self { case .income: "Сумма доходов"; case .expense: "Сумма расходов"; case .net: "Доходы минус расходы"; case .count: "Количество операций"; case .balance: "Остаток / задолженность"; case .principal: "Тело задолженности"; case .interest: "Начисленные проценты"; case .fees: "Комиссии и штрафы"; case .payment: "Предстоящие платежи"; case .grace: "Погашение для льготы"; case .yield: "Проценты до удержаний"; case .netYield: "Проценты после удержаний" } } }
 extension Grouping { var title: String { switch self { case .day: "День"; case .month: "Месяц"; case .account: "Счёт"; case .category: "Категория"; case .subcategory: "Подкатегория"; case .project: "Проект" } } }
 extension Presentation { var title: String { switch self { case .table: "Таблица"; case .bars: "Столбцы"; case .line: "Линия"; case .ring: "Кольцо" } } }
 
@@ -115,7 +117,7 @@ struct ReportEditor: View {
     @State private var removed: [String] = []
     @State private var confirmDataset = false
     @State private var detail: OperationDetailContext?
-    var groupings: [Grouping] { report.dataset == .balances ? [.day, .month, .account] : Grouping.allCases }
+    var groupings: [Grouping] { report.dataset != .flows ? [.day, .month, .account] : Grouping.allCases }
     var ringAllowed: Bool { guard report.metric != .net else { return false }; guard report.dataset == .balances else { return true }; guard let db = model.db else { return false }; var candidate = report; candidate.presentation = .table; guard let rows = try? Reports.rows(candidate, db: db) else { return false }; return !rows.contains { $0.value.known < 0 } }
     var presentations: [Presentation] { Presentation.allCases.filter { ($0 != .line || [.day, .month].contains(report.grouping)) && ($0 != .ring || ringAllowed) } }
     var body: some View {
@@ -123,12 +125,12 @@ struct ReportEditor: View {
             FormField(title: "Название") { TextField("Название отчёта", text: $report.name).textFieldStyle(.roundedBorder) }
             Text("Что считать").font(.headline)
             FormField(title: "Данные") { Picker("Данные", selection: Binding(get: { report.dataset }, set: changeDataset)) { ForEach(Dataset.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden() }
-            FormField(title: "Показатель") { Picker("Показатель", selection: $report.metric) { ForEach(report.dataset == .balances ? [.balance] : [Metric.income, .expense, .net, .count], id: \.self) { Text($0.title).tag($0) } }.labelsHidden() }
+            FormField(title: "Показатель") { Picker("Показатель", selection: $report.metric) { ForEach(report.dataset.metrics, id: \.self) { Text($0.title).tag($0) } }.labelsHidden() }
             Divider(); Text("Как показать").font(.headline)
             HStack { FormField(title: "Группировка") { Picker("Группировка", selection: $report.grouping) { ForEach(groupings, id: \.self) { Text($0.title).tag($0) } }.labelsHidden() }; FormField(title: "Представление") { Picker("Представление", selection: $report.presentation) { ForEach(presentations, id: \.self) { Text($0.title).tag($0) } }.labelsHidden() } }
             CurrencyPicker(title: "Валюта отчёта", selection: $report.currency)
             Divider(); Text("Выборка").font(.headline); FilterBar(filters: $report.filters, showParticipation: report.dataset == .flows, allowCategoryProject: report.dataset == .flows, kinds: report.metric == .income ? [.income] : report.metric == .expense ? [.expense] : [.income, .expense])
-            if report.dataset == .balances { Text("Категории, проекты и участие в бюджетах к остаткам не применяются.").font(.caption).foregroundStyle(BeeStyle.muted) }
+            if report.dataset != .flows { Text("Категории, проекты и участие в бюджетах к остаткам не применяются.").font(.caption).foregroundStyle(BeeStyle.muted) }
             Toggle("Добавить на Главную", isOn: $addDashboard).toggleStyle(.checkbox)
             DisclosureGroup("Предпросмотр") { ReportDisplay(report: report, onDetail: { ids, title, filters in detail = OperationDetailContext(title: title, ids: ids, filters: filters) }, onAccount: { id in detail = OperationDetailContext(title: "История счёта", accountID: id) }).padding(.top, 12) }
         }.onAppear { guard !loaded else { return }; if let old = model.db?.reports.first(where: { $0.id == id }) { report = old; addDashboard = model.db?.dashboard.contains { $0.reportID == old.id } ?? false } else { report.currency = model.db?.settings.reportCurrency ?? "RUB" }; original = report; originalAdd = addDashboard; loaded = true }
@@ -154,6 +156,10 @@ struct ReportDisplay: View {
     @EnvironmentObject var model: AppModel; var report: Report
     var onDetail: (([UUID], String, Filters) -> Void)?
     var onAccount: ((UUID) -> Void)?
+    @State private var result: Result<[ReportRow], Error>?
+    private var calculationKey: String {
+        (model.db?.id.uuidString ?? "locked") + "|" + String(model.db?.revision ?? 0) + "|" + String(decoding: (try? JSONEncoder().encode(report)) ?? Data(), as: UTF8.self)
+    }
     private func displayTitle(_ row: ReportRow) -> String {
         if report.grouping == .day, let day = try? Day(row.title) { return CalendarDays.label(day) }
         if report.grouping == .month, let day = try? Day(row.title + "-01") {
@@ -162,14 +168,26 @@ struct ReportDisplay: View {
         }
         return row.title
     }
-    var result: Result<[ReportRow], Error> { Result { guard let db = model.db else { throw BudgetError.locked }; return try Reports.rows(report, db: db) } }
     var body: some View {
+        content.task(id: calculationKey) {
+            result = nil
+            guard let snapshot = model.db else { result = .failure(BudgetError.locked); return }
+            let candidate = report, key = calculationKey
+            let worker = Task.detached(priority: .userInitiated) { Result { try Reports.rows(candidate, db: snapshot) } }
+            let calculated = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+            guard !Task.isCancelled, key == calculationKey else { return }
+            result = calculated
+        }
+    }
+    @ViewBuilder private var content: some View {
+        if [.financialPlan, .depositYield].contains(report.dataset) { Text("Прогноз по введённым условиям. Частичные суммы могут не учитывать неизвестные ставки, налоги или курсы.").font(.caption).foregroundStyle(BeeStyle.warning) }
         switch result {
-        case .failure(let e): Text(e.localizedDescription).foregroundStyle(BeeStyle.negative)
-        case .success(let rows):
+        case .none: ProgressView("Рассчитываем отчёт…")
+        case .some(.failure(let e)): Text(e.localizedDescription).foregroundStyle(BeeStyle.negative)
+        case .some(.success(let rows)):
             if rows.isEmpty { EmptyState(title: "Нет данных", detail: "В выбранном периоде и фильтрах нет подходящих операций.") }
             else { VStack(alignment: .leading, spacing: 10) {
-                if let v = report.dataset == .balances && report.grouping != .account ? rows.last?.value : try? Reports.total(rows) { Group { if report.metric == .count { Text("\(v.known) операций").font(.title3.bold()) } else { PartialValue(value: v, currency: report.currency, onMissingOperations: { ids in if let onDetail { onDetail(ids, report.name + " · без курса", report.filters) } else { model.showOperations(ids, title: report.name + " · без курса", filters: report.filters) } }) } } }
+                if let v = [Dataset.balances, .debt].contains(report.dataset) && report.grouping != .account ? rows.last?.value : try? Reports.total(rows) { Group { if report.metric == .count { Text("\(v.known) операций").font(.title3.bold()) } else { PartialValue(value: v, currency: report.currency, onMissingOperations: { ids in if let onDetail { onDetail(ids, report.name + " · без курса", report.filters) } else { model.showOperations(ids, title: report.name + " · без курса", filters: report.filters) } }) } } }
                 if report.presentation != .table { Chart(rows) { row in
                     let value = Double(row.value.known) / (report.metric == .count ? 1 : pow(10, Double((try? Currency.get(report.currency).scale) ?? 2)))
                     if report.presentation == .bars { BarMark(x: .value("Группа", displayTitle(row)), y: .value("Значение", value)).foregroundStyle(BeeStyle.expense) }

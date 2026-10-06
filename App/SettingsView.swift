@@ -55,6 +55,20 @@ struct SettingsView: View {
                 Text("Хранятся 30 дневных и 10 служебных копий. Ручные копии не удаляются. Для переноса нужен ключ восстановления.").font(.caption).foregroundStyle(BeeStyle.muted)
                 Divider(); Button("Восстановить полную копию…") { model.sheet = SheetRoute(kind: .restore) }
             }.beeCard()
+        case .reminders:
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Финансовый календарь доступен без системных уведомлений.").font(.headline)
+                if db.financeData.reminders.systemEnabled { Button("Выключить системные уведомления") { model.perform { db in var book = db.financeData; book.reminders.systemEnabled = false; db.finances = book } } }
+                else { Button("Включить системные уведомления…") { Task { await FinancialNotifications.enable(model: model) } } }
+                Text("Системные напоминания содержат нейтральный текст. Названия счетов, суммы и условия видны после разблокировки. Планируются ближайшие 45 дней, до 60 напоминаний; окно пополняется при работе с бюджетом.").font(.caption).foregroundStyle(BeeStyle.muted)
+                if let status = model.financialNotificationStatus {
+                    Text(status.message).font(.caption)
+                    if let through = status.scheduledThrough { Text("Проверено до: " + through.formatted(date: .numeric, time: .shortened) + " · в очереди: \(status.pendingCount)").font(.caption).foregroundStyle(BeeStyle.muted) }
+                    if let error = status.error { Text(error).font(.caption).foregroundStyle(BeeStyle.negative) }
+                }
+                Button("Проверить расписание") { model.refreshFinancialForecasts() }.disabled(model.financialBusy)
+                Button("Открыть календарь") { model.section = .financialCalendar }
+            }.beeCard()
         case .transfer:
             VStack(alignment: .leading, spacing: 16) { Text("CSV для таблиц и обмена").font(.headline); Button("Импортировать CSV…") { model.sheet = SheetRoute(kind: .importCSV) }; Button("Экспортировать операции…") { model.exportCSV() }; Text("CSV хранится открытым текстом. Полная зашифрованная копия переносит все настройки и историю.").font(.caption).foregroundStyle(BeeStyle.muted) }.beeCard()
         }

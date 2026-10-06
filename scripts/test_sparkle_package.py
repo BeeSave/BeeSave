@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('app', type=Path)
 parser.add_argument('identity')
 args = parser.parse_args()
+versionInfo = plistlib.loads((args.app / 'Contents/Info.plist').read_bytes())
 workspace = Path(tempfile.mkdtemp(prefix='BeeSavePackageTests-'))
 runner = workspace / 'runner'
 subprocess.run(['xcrun', 'clang', '-fobjc-arc', '-fblocks', '-framework', 'Foundation', '-framework', 'Security',
@@ -37,8 +38,8 @@ def change(key, value):
     return mutate
 
 test('same-certificate-package', accepted=True)
-for key, value in [('CFBundleIdentifier', 'com.other.app'), ('CFBundleVersion', '7'),
-    ('CFBundleShortVersionString', '1.3.0'), ('SUPublicEDKey', 'A'*44), ('SURequireSignedFeed', False),
+for key, value in [('CFBundleIdentifier', 'com.other.app'), ('CFBundleVersion', str(int(versionInfo['CFBundleVersion']) + 1)),
+    ('CFBundleShortVersionString', versionInfo['CFBundleShortVersionString'] + '.1'), ('SUPublicEDKey', 'A'*44), ('SURequireSignedFeed', False),
     ('SUVerifyUpdateBeforeExtraction', False), ('SUSignedFeedFailureExpirationInterval', 3600)]:
     test('wrong-'+key, change(key, value))
 test('entitlement-drift', custom=dict(rights, **{'com.apple.security.files.downloads.read-write': True}))

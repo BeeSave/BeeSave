@@ -2,9 +2,11 @@ import Foundation
 
 public struct Valuation: Equatable, Sendable {
     public var known: Int64 = 0; public var missing: [UUID] = []; public var currencies: Set<String> = []; public var count = 0
-    public var partial: Bool { !missing.isEmpty }
+    public var missingConditions: [UUID] = []
+    public var partial: Bool { !missing.isEmpty || !missingConditions.isEmpty }
+    public var partialDescription: String { [missing.isEmpty ? nil : "без курса: \(missing.count)", missingConditions.isEmpty ? nil : "без условий: \(missingConditions.count)"].compactMap { $0 }.joined(separator: "; ") }
     public init() {}
-    public func label(currency: String) -> String { Money.display(known, currency: currency) + (partial ? " · частично (без курса: \(missing.count))" : "") }
+    public func label(currency: String) -> String { Money.display(known, currency: currency) + (partial ? " · частично (\(partialDescription))" : "") }
 }
 public struct ReportRow: Identifiable, Equatable, Sendable {
     public var id: String; public var title: String; public var value: Valuation; public var operationIDs: [UUID] = []; public var accountIDs: [UUID] = []
@@ -47,9 +49,13 @@ public enum Reports {
     }
     public static func validate(_ r: Report, db: Database) throws {
         try Ledger.nonempty(r.name); _ = try Currency.get(r.currency); try validateFilters(r.filters, db: db)
-        if r.dataset == .balances {
+        if [.debt, .financialPlan, .depositYield].contains(r.dataset) {
+            let allowed: [Metric] = r.dataset == .debt ? [.balance, .principal, .interest, .fees] : r.dataset == .financialPlan ? [.payment, .grace] : [.yield, .netYield]
+            guard allowed.contains(r.metric), [.account, .day, .month].contains(r.grouping), r.filters.categories.isEmpty, r.filters.projectID == nil, r.filters.participation == .all else { throw BudgetError.invalid("Для финансового отчёта доступны счёт, день и месяц; категории, проекты и бюджеты не применяются.") }
+            guard r.presentation != .ring || r.dataset == .debt else { throw BudgetError.invalid("Для прогнозов выберите таблицу, линию или столбцы.") }
+        } else if r.dataset == .balances {
             guard r.metric == .balance, [.day, .month, .account].contains(r.grouping), r.filters.categories.isEmpty, r.filters.projectID == nil else { throw BudgetError.invalid("Для остатков доступны счёт, день и месяц; категория/проект не применяются.") }
-        } else { guard r.metric != .balance else { throw BudgetError.invalid("Остаток требует набор данных «Остатки».") } }
+        } else { guard [Metric.income, .expense, .net, .count].contains(r.metric) else { throw BudgetError.invalid("Остаток требует набор данных «Остатки».") } }
         guard r.presentation != .line || [.day, .month].contains(r.grouping) else { throw BudgetError.invalid("Линия требует группировку по времени.") }
         if r.presentation == .ring {
             guard r.metric != .net else { throw BudgetError.invalid("Кольцо не поддерживает разницу с отрицательными группами.") }
@@ -94,7 +100,7 @@ public enum Reports {
             var row = ReportRow(id: a.id.uuidString, title: a.name, value: v); row.accountIDs = [a.id]; return row
         }
     }
-    public static func total(_ rows: [ReportRow]) throws -> Valuation { try rows.reduce(Valuation()) { v, row in var r = v; r.known = try Money.add(r.known, row.value.known); r.missing += row.value.missing; r.currencies.formUnion(row.value.currencies); r.count += row.value.count; return r } }
+    public static func total(_ rows: [ReportRow]) throws -> Valuation { try rows.reduce(Valuation()) { v, row in var r = v; r.known = try Money.add(r.known, row.value.known); r.missing += row.value.missing; r.missingConditions += row.value.missingConditions; r.currencies.formUnion(row.value.currencies); r.count += row.value.count; return r } }
     public static func budgetFact(_ b: Budget, db: Database, lineID: UUID? = nil, filters: Filters? = nil) throws -> Valuation {
         let ops = filters.map { selected(db, filters: $0, kinds: [.expense], sorted: false) } ?? db.operations
         let line = b.lines.first { $0.id == lineID }
@@ -104,6 +110,7 @@ public enum Reports {
     }
     public static func rows(_ r: Report, db: Database, validating: Bool = true) throws -> [ReportRow] {
         if validating { try validate(r, db: db) }
+        if [.debt, .financialPlan, .depositYield].contains(r.dataset) { return try FinancialReports.rows(r, db: db) }
         if r.dataset == .balances {
             if r.grouping == .account { return try balances(db, filters: r.filters, currency: r.currency) }
             let start = r.filters.start ?? Day.today.firstOfMonth; let end = min(r.filters.end ?? .today, .today)

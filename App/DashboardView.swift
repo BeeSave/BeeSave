@@ -34,6 +34,7 @@ struct DashboardView: View {
                 }
             }
             if !db.accounts.isEmpty && !model.showGettingStarted { HStack(alignment: .top, spacing: 14) { FilterBar(filters: filters, kinds: [.expense, .income]); CurrencyPicker(title: "Валюта сводки", selection: currency, compact: true).fixedSize() } }
+            FinancialDashboardSummary()
             if db.accounts.isEmpty || model.showGettingStarted {
                 VStack(alignment: .leading, spacing: 18) {
                     Image(systemName: "wallet.bifold").font(.system(size: 32)).foregroundStyle(BeeStyle.expense)

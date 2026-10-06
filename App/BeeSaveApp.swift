@@ -42,6 +42,8 @@ struct RootView: View {
         .sheet(item: $model.sheet) { route in
             switch route.kind {
             case .account: AccountEditor(id: route.entityID)
+            case .bank: BankEditor()
+            case .financialPayment: FinancialGroupEditor(groupID: route.entityID)
             case .operation: OperationEditor(id: route.entityID, kind: route.operationKind, accountContext: route.accountContext)
             case .reconciliation: ReconcileEditor(accountID: route.entityID)
             case .category: CategoryEditor(id: route.entityID, initialKind: route.operationKind)

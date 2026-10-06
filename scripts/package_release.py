@@ -18,6 +18,8 @@ expected = plistlib.loads((root / 'App/Info.plist').read_bytes())
 if any(info.get(key) != value for key, value in expected.items()):
     raise SystemExit('Built updater settings differ from the release policy.')
 version = info['CFBundleShortVersionString']
+if tuple(int(part) for part in version.split('.')) >= (1, 3, 0):
+    subprocess.run(['python3', str(root / 'scripts/verify_financial_catalog.py'), '--require-complete'], check=True)
 if info['CFBundleIdentifier'] != 'com.mubudget.app' or info.get('NSFaceIDUsageDescription'):
     raise SystemExit('Not a production password-only BeeSave package.')
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(args.app)], check=True)

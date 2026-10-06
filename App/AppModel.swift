@@ -5,16 +5,16 @@ import BudgetCore
 import BudgetPresentation
 
 enum SectionID: String, CaseIterable, Identifiable {
-    case dashboard = "Главная", accounts = "Мои счета", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", references = "Справочники"
+    case dashboard = "Главная", accounts = "Мои счета", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", references = "Справочники", financialCalendar = "Финансовый календарь"
     var id: String { rawValue }
-    var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .references: "books.vertical" } }
+    var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .references: "books.vertical"; case .financialCalendar: "calendar" } }
 }
 enum SettingsTask: String, CaseIterable, Identifiable {
-    case general = "Общие", access = "Вход и защита", rates = "Валюты и курсы", backups = "Резервные копии", transfer = "Импорт и экспорт"
+    case general = "Общие", access = "Вход и защита", rates = "Валюты и курсы", backups = "Резервные копии", transfer = "Импорт и экспорт", reminders = "Напоминания"
     var id: String { rawValue }
 }
 struct SheetRoute: Identifiable {
-    enum Kind { case account, operation, reconciliation, category, project, budget, report, reportView, layout, importCSV, restore }
+    enum Kind { case account, bank, financialPayment, operation, reconciliation, category, project, budget, report, reportView, layout, importCSV, restore }
     var id = UUID(); var kind: Kind; var entityID: UUID?; var operationKind = OperationKind.expense; var accountContext: UUID?; var budgetKind = BudgetKind.monthly
 }
 @MainActor final class AppModel: ObservableObject {
@@ -23,6 +23,14 @@ struct SheetRoute: Identifiable {
     @Published var previewScenario = PreviewScenario.filled
     #endif
     @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var section = SectionID.dashboard; @Published var sheet: SheetRoute?; @Published var historyAccount: UUID?; @Published var error: String?; @Published var backupError: String?; @Published var notice: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var startupError: String?
+    @Published var financialEvents: [UUID: [FinanceEvent]] = [:]
+    @Published var financialDebts: [UUID: DebtSummary] = [:]
+    @Published var financialErrors: [UUID: String] = [:]
+    @Published var financialBusy = false
+    @Published var financialNotificationStatus: FinancialNotificationStatus?
+    var pendingFinancialRoute: (String, String)?
+    var financialTask: Task<Void, Never>?
+    var financialCalculationID = UUID()
     let vault: VaultStore; let root: URL; var rateTask: Task<Void, Never>?; private var failures = 0; var lastActivity = Date(); private var sessionHidden = false; private var lastRateAttempt = Date.distantPast
     @Published var updateFrozen = false
     @Published var updateForms = Set<UUID>()
@@ -78,12 +86,13 @@ struct SheetRoute: Identifiable {
         } }
     }
     func lock() {
+        cancelFinancialForecasts(); financialEvents = [:]; financialDebts = [:]; financialErrors = [:]; financialNotificationStatus = nil
         rateTask?.cancel(); rateTask = nil; rateBusy = false; sheet = nil; historyAccount = nil; drilldown = nil; showGettingStarted = false; settingsTask = .general; error = nil; notice = nil; backupError = nil; db = nil; vault.close(); sessionHidden = true
     }
     func resumeSession() {
         guard sessionHidden else { return }; sessionHidden = false
     }
-    func didUnlock() { db = vault.db; bootstrap = vault.bootstrap; startupError = nil; failures = 0; retryAt = nil; sessionHidden = false; activity(); confirmUpdatedBudget?(); refreshRates(automatic: true) }
+    func didUnlock() { db = vault.db; bootstrap = vault.bootstrap; startupError = nil; failures = 0; retryAt = nil; sessionHidden = false; activity(); confirmUpdatedBudget?(); refreshRates(automatic: true); refreshFinancialForecasts() }
     func unlock(password: String) {
         guard !busy else { return }; guard retryAt == nil || Date() >= retryAt! else { error = "Подождите 30 секунд после пяти ошибочных попыток."; return }
         busy = true; defer { busy = false }
@@ -106,7 +115,7 @@ struct SheetRoute: Identifiable {
     func commit(_ mutation: (inout Database) throws -> Void) throws {
         try requireWritableSession()
         guard !busy else { throw BudgetError.storage("Дождитесь завершения текущей записи.") }; busy = true; defer { busy = false }
-        try vault.transaction(mutation); db = vault.db; activity()
+        try vault.transaction(mutation); db = vault.db; activity(); refreshFinancialForecasts()
         let folder = backupFolder; let scope = folder.startAccessingSecurityScopedResource(); defer { if scope { folder.stopAccessingSecurityScopedResource() } }
         do { try Backups.daily(store: vault, folder: folder); db = vault.db; backupError = nil } catch { backupError = "Автокопия не создана: " + error.localizedDescription }
     }
@@ -144,9 +153,19 @@ struct SheetRoute: Identifiable {
         alert.informativeText = "Выборка: \(CalendarDays.range(currentFilters)), \(current.count) записей. Счета: \(currentFilters.accounts.count == 0 ? "все" : String(currentFilters.accounts.count)); категории: \(currentFilters.categories.count == 0 ? "все" : String(currentFilters.categories.count)).\nCSV сохраняется открытым текстом без шифрования."
         alert.addButton(withTitle: "Текущая выборка · \(current.count)"); alert.addButton(withTitle: "Все операции · \(db.operations.count)"); alert.addButton(withTitle: "Отмена")
         let response = alert.runModal(); guard response == .alertFirstButtonReturn || response == .alertSecondButtonReturn else { return }
-        let exported = response == .alertFirstButtonReturn ? current : db.operations
+        var exported = response == .alertFirstButtonReturn ? current : db.operations
+        let selectedIDs = Set(exported.map(\.id))
+        let incomplete = db.financeData.groups.filter { !selectedIDs.isDisjoint(with: $0.operationIDs) && !Set($0.operationIDs).isSubset(of: selectedIDs) }
+        if !incomplete.isEmpty {
+            let missing = Set(incomplete.flatMap(\.operationIDs)).subtracting(selectedIDs)
+            let rows = db.operations.filter { missing.contains($0.id) }
+            let review = NSAlert(); review.messageText = "В выборке есть части финансовых платежей"
+            review.informativeText = "Связанные записи вне фильтра: \(rows.count).\n" + rows.prefix(20).map { "\($0.date) · \($0.kind.title) · " + ((try? db.account($0.accountID).name) ?? "") + " · " + BeeFormat.money($0.amount, currency: (try? db.account($0.accountID).currency) ?? "RUB") }.joined(separator: "\n")
+            review.addButton(withTitle: "Включить связанные записи"); review.addButton(withTitle: "Исключить неполные группы"); review.addButton(withTitle: "Отмена")
+            switch review.runModal() { case .alertFirstButtonReturn: exported += rows; case .alertSecondButtonReturn: let removed = Set(incomplete.flatMap(\.operationIDs)); exported.removeAll { removed.contains($0.id) }; default: return }
+        }
         let panel = NSSavePanel(); panel.allowedContentTypes = [.commaSeparatedText]; panel.nameFieldStringValue = "BeeSave-\(Day.today).csv"; guard panel.runModal() == .OK, let url = panel.url else { return }
-        do { let bytes = try CSVCodec.export(exported, db: db); try bytes.write(to: url, options: .atomic); notice = "Экспорт сохранён: \(url.lastPathComponent)" } catch { self.error = "Экспорт не сохранён. Проверьте место и права записи." }
+        do { let bytes = try CSVCodec.export(exported, db: db); try bytes.write(to: url, options: .atomic); notice = "Экспорт сохранён: \(url.lastPathComponent)" } catch { self.error = "Экспорт не сохранён: " + error.localizedDescription }
     }
     func manualBackup() {
         guard !updateFrozen, !updateVerificationPending else { return }
@@ -197,7 +216,7 @@ extension AppModel {
                 let b = Bootstrap(databaseID: sample.id, password: try VaultCrypto.wrapPassword(key, password: "UI fixture password only"), recovery: try VaultCrypto.seal(key, key: recovery, context: VaultCrypto.recoveryContext))
                 try vault.initialize(db: sample, dataKey: key, bootstrap: b); db = vault.db; bootstrap = b
             }
-            notice = "Тестовое окно · вымышленные данные · отдельная временная база"
+            notice = "Тестовое окно · вымышленные данные · отдельная временная база"; refreshFinancialForecasts()
         } catch { startupError = error.localizedDescription }
     }
 }

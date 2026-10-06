@@ -278,7 +278,7 @@ enum InstallUpdateState: Equatable {
     func feedURLString(for updater: SPUUpdater) -> String? { owner?.feed(cycle) }
     func feedParameters(for updater: SPUUpdater, sendingSystemProfile: Bool) -> [[String: String]] { [] }
     func allowedSystemProfileKeys(for updater: SPUUpdater) -> [String]? { [] }
-    func updaterShouldPromptForPermission(toCheckForUpdates updater: SPUUpdater) -> Bool { false }
+    func updaterShouldPromptForPermissionToCheck(forUpdates updater: SPUUpdater) -> Bool { false }
     func updater(_ updater: SPUUpdater, shouldDownloadReleaseNotesForUpdate item: SUAppcastItem) -> Bool { false }
     func bestValidUpdate(in appcast: SUAppcast, for updater: SPUUpdater) -> SUAppcastItem? { owner?.bestItem(appcast, cycle: cycle) }
     func updater(_ updater: SPUUpdater, shouldProceedWithUpdate item: SUAppcastItem, updateCheck: SPUUpdateCheck) throws {

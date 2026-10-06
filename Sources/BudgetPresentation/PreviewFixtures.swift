@@ -2,11 +2,12 @@ import Foundation
 import BudgetCore
 
 public enum PreviewScenario: String, CaseIterable, Sendable {
-    case new, empty, account, filled, partial, archived, custom, volume
-    public var title: String { switch self { case .new: "Первый запуск"; case .empty: "Нет счетов"; case .account: "Счёт без потоков"; case .filled: "Заполненная Главная"; case .partial: "Нет курса"; case .archived: "Архив"; case .custom: "Своя раскладка"; case .volume: "100 000 операций" } }
+    case new, empty, account, filled, partial, archived, custom, volume, financial
+    public var title: String { switch self { case .new: "Первый запуск"; case .empty: "Нет счетов"; case .account: "Счёт без потоков"; case .filled: "Заполненная Главная"; case .partial: "Нет курса"; case .archived: "Архив"; case .custom: "Своя раскладка"; case .volume: "100 000 операций"; case .financial: "Финансовые счета" } }
 }
 public enum PreviewFixtures {
     public static func database(_ scenario: PreviewScenario, today: Day = .today) throws -> Database {
+        if scenario == .financial { return try financial(today: today) }
         if scenario == .volume { return try volume(today: today) }
         var db = Database(); db.settings.dashboardFilters = Filters(start: today.firstOfMonth, end: today); db.settings.lastRateCheck = Date(); db.settings.lockMinutes = 0
         if scenario == .empty || scenario == .new { return db }
@@ -29,6 +30,18 @@ public enum PreviewFixtures {
         else { db.rates = [FXRate(base: "USD", quote: "RUB", rate: "92", date: today)] }
         if scenario == .archived { var archived = Account(name: "Старый счёт", currency: "RUB", openedOn: today.firstOfMonth); try Ledger.saveAccount(archived, opening: -5_000, in: &db); archived.archived = true; try Ledger.saveAccount(archived, in: &db) }
         if scenario == .custom { var own = Filters(start: today.firstOfMonth, end: today); own.accounts = [cash.id]; var balances = DashboardBlock(kind: "balances"); balances.wide = true; balances.ownFilters = own; var hidden = DashboardBlock(kind: "trend"); hidden.visible = false; db.dashboard = [DashboardBlock(kind: "categories"), balances, hidden, DashboardBlock(kind: "flows")] }
+        try Ledger.validate(db); return db
+    }
+    private static func financial(today: Day) throws -> Database {
+        var db = Database(); db.settings.lockMinutes = 0; db.settings.lastRateCheck = Date()
+        let start = try FinanceMath.addingMonths(today.firstOfMonth, -1)
+        let cash = Account(name: "Основная карта · тест", currency: "RUB", openedOn: start); try Ledger.saveAccount(cash, opening: 20_000_000, in: &db)
+        for (kind, name, principal, months) in [(AccountKind.deposit, "Депозит · тест", Int64(10_000_000), 12), (.revolvingCredit, "Кредитная карта · тест", 3_000_000, 12), (.mortgage, "Ипотека · тест", 300_000_000, 360)] {
+            let account = Account(name: name, currency: "RUB", openedOn: start); try Ledger.saveAccount(account, opening: kind.isDebt ? -principal : principal, in: &db)
+            var contract = FinancialContract(accountID: account.id, kind: kind, start: start, end: kind == .revolvingCredit ? nil : try FinanceMath.addingMonths(start, months), annualPercent: "12")
+            contract.originalPrincipal = principal; contract.paymentAccountID = cash.id; contract.terms[0].basis = .equalMonths; contract.terms[0].credit.limit = 10_000_000; contract.terms[0].deposit.capitalize = true
+            try FinancialLedger.saveContract(contract, in: &db)
+        }
         try Ledger.validate(db); return db
     }
     private static func volume(today: Day) throws -> Database {

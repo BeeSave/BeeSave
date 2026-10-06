@@ -9,6 +9,8 @@ public enum BudgetMode: String, Codable, CaseIterable, Sendable { case automatic
     public var title: String { self == .automatic ? "Автоматически" : "Вне бюджетов" }
 }
 public struct Account: Codable, Identifiable, Equatable, Sendable {
+    public var financialKind: AccountKind?; public var bankID: String?; public var contractID: UUID?
+    public var kind: AccountKind { financialKind ?? .ordinary }
     public var id = UUID(); public var name: String; public var currency: String; public var openedOn: Day; public var archived = false; public var createdAt = Date(); public var modifiedAt = Date()
     public init(name: String, currency: String, openedOn: Day = .today) { self.name = name; self.currency = currency; self.openedOn = openedOn }
 }
@@ -27,6 +29,7 @@ public struct FXRate: Codable, Identifiable, Equatable, Sendable {
     public var stale: Bool { date < Day.today.adding(-7) }
 }
 public struct Operation: Codable, Identifiable, Equatable, Sendable {
+    public var financial: FinanceOperationDetails?
     public var id = UUID(); public var kind: OperationKind; public var date: Day; public var accountID: UUID; public var amount: Int64; public var toAccountID: UUID?; public var toAmount: Int64?; public var categoryID: UUID?; public var projectID: UUID?; public var comment = ""; public var budgetMode = BudgetMode.automatic; public var transferRate: String?; public var fx: [FXRate] = []; public var observedBalance: Int64?; public var createdAt = Date(); public var modifiedAt = Date()
     public init(kind: OperationKind, date: Day = .today, accountID: UUID, amount: Int64) { self.kind = kind; self.date = date; self.accountID = accountID; self.amount = amount }
     public func posting(for id: UUID) -> Int64 {
@@ -53,8 +56,8 @@ public struct Filters: Codable, Equatable, Sendable {
     public init(start: Day? = nil, end: Day? = nil) { self.start = start; self.end = end }
     public static var month: Filters { Filters(start: Day.today.firstOfMonth, end: .today) }
 }
-public enum Dataset: String, Codable, CaseIterable, Sendable { case flows, balances }
-public enum Metric: String, Codable, CaseIterable, Sendable { case income, expense, net, count, balance }
+public enum Dataset: String, Codable, CaseIterable, Sendable { case flows, balances, debt, financialPlan, depositYield }
+public enum Metric: String, Codable, CaseIterable, Sendable { case income, expense, net, count, balance, principal, interest, fees, payment, grace, yield, netYield }
 public enum Grouping: String, Codable, CaseIterable, Sendable { case day, month, account, category, subcategory, project }
 public enum Presentation: String, Codable, CaseIterable, Sendable { case table, bars, line, ring }
 public struct Report: Codable, Identifiable, Equatable, Sendable {
@@ -77,7 +80,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
 public struct Database: Codable, Equatable, Sendable {
     /// Optional for decoding version-1 files written before revision tracking was introduced.
     public var revision: UInt64? = 0
-    public var version = 1; public var id = UUID(); public var accounts: [Account] = []; public var categories: [Category] = [Category(name: "Без категории", kind: .expense, system: true), Category(name: "Без категории", kind: .income, system: true)]; public var projects: [Project] = []; public var operations: [Operation] = []; public var budgets: [Budget] = []; public var rates: [FXRate] = []; public var reports: [Report] = []; public var dashboard = DashboardBlock.defaults; public var imports: [ImportBatch] = []; public var settings = AppSettings()
+    public var finances: FinancialBook?
+    public var version = 2; public var id = UUID(); public var accounts: [Account] = []; public var categories: [Category] = [Category(name: "Без категории", kind: .expense, system: true), Category(name: "Без категории", kind: .income, system: true)]; public var projects: [Project] = []; public var operations: [Operation] = []; public var budgets: [Budget] = []; public var rates: [FXRate] = []; public var reports: [Report] = []; public var dashboard = DashboardBlock.defaults; public var imports: [ImportBatch] = []; public var settings = AppSettings()
     public init() {}
     public func account(_ id: UUID) throws -> Account { guard let a = accounts.first(where: { $0.id == id }) else { throw BudgetError.missing("Счёт не найден.") }; return a }
     public func categoryPath(_ id: UUID?) -> String { guard let c = categories.first(where: { $0.id == id }) else { return "—" }; if let p = categories.first(where: { $0.id == c.parentID }) { return p.name + " / " + c.name }; return c.name }
