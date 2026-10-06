@@ -1,0 +1,1370 @@
+{
+  "version": 1,
+  "checkedOn": "2026-10-07",
+  "scope": "top20-per-market",
+  "presentation": "BeeSave template mark; original geometry, app palette and consistent container",
+  "rankingSources": {
+    "RU": {
+      "url": "https://www.raexpert.ru/rankingtable/bank/monthly/sep2026/tab01/",
+      "effectiveOn": "2026-09-01",
+      "basis": "Top twenty by published gross assets in the ranking; banks with withheld reports are not ranked."
+    },
+    "US": {
+      "url": "https://www.federalreserve.gov/releases/lbr/current/default.htm",
+      "effectiveOn": "2026-06-30",
+      "basis": "Domestically chartered banks ranked by consolidated assets; published 2026-10-02."
+    },
+    "GB": {
+      "url": "https://www.helgilibrary.com/banks/united-kingdom",
+      "effectiveOn": "2025-12-31",
+      "basis": "Published assets ranking of UK banks and building societies; reporting dates vary by institution. Snapshot covers institutions with published 2025 figures; this is not an exhaustive ranking of all UK-authorised firms."
+    }
+  },
+  "targets": [
+    {
+      "country": "RU",
+      "rank": 1,
+      "bankID": "ru-cbr-1481",
+      "brand": "Сбер",
+      "slug": "ru-sber",
+      "website": "https://www.sberbank.ru/",
+      "logoSource": "https://developers.sber.ru/docs/assets/images/logo-black-c8da5f1fffd34cc02a94ac245c5dfc7f.png",
+      "logoSourcePage": "https://www.sberbank.ru/",
+      "logoOriginalSHA256": "9a7348cad84d3f3e0c4229ae4a28fe5ec97bd577e586849d180476171ad4e484",
+      "logoResource": "ru-sber.png",
+      "logoSHA256": "79b7f3fcf1035c56014fe2af2cde654f4043aa8795624c77936b142e9dfe6e1e",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "crop": [
+          60,
+          65,
+          110,
+          110
+        ],
+        "mask": "dark"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 2,
+      "bankID": "ru-cbr-1000",
+      "brand": "ВТБ",
+      "slug": "ru-vtb",
+      "website": "https://www.vtb.ru/",
+      "logoSource": "https://www.vtb.ru/media-files/system/vtb.ru/favicons/favicon-svg.svg",
+      "logoSourcePage": "https://www.vtb.ru/",
+      "logoOriginalSHA256": "728c62be6efb2408ede778b44b8ba05b6f18f33c7ce32a3eb618e3fabe861fab",
+      "logoResource": "ru-vtb.png",
+      "logoSHA256": "619d4ca6ef416e9bf998c802071567027b5cdb69538fc0d626c2cc9c3584651a",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "RU",
+      "rank": 3,
+      "bankID": "ru-cbr-354",
+      "brand": "Газпромбанк",
+      "slug": "ru-gpb",
+      "website": "https://www.gazprombank.ru/",
+      "logoSource": "https://www.gazprombank.ru/_next/c2e2cf5515281430d1da46b535fb5d23/_next/public/favicons/default/dark-favicon/favicon-32x32.svg",
+      "logoSourcePage": "https://www.gazprombank.ru/",
+      "logoOriginalSHA256": "9362f737d73b3fdb47736cda818d6155ec798db997b5256c91bcbca33e2a1943",
+      "logoResource": "ru-gpb.png",
+      "logoSHA256": "2fa3a5a692b24901fd9311e55947cc5133cc7d45a88c76b5684a492c67362574",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "mask": "blue"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 4,
+      "bankID": "ru-cbr-1326",
+      "brand": "Альфа-Банк",
+      "slug": "ru-alfa",
+      "website": "https://alfabank.ru/",
+      "logoSource": "https://upload.wikimedia.org/wikipedia/commons/9/98/Alfa_Bank_RU_logo.svg",
+      "logoSourcePage": "https://commons.wikimedia.org/wiki/File:Alfa_Bank_RU_logo.svg",
+      "logoOriginalSHA256": "e1daa6c24a41e96d40729a05d451956c9eb2f3490bd85ac1a0c27392f0ad5275",
+      "logoResource": "ru-alfa.png",
+      "logoSHA256": "d57678d0837931d838e0ce3e6efd08af9337b791ae882cc5b6a6318eacd158fe",
+      "logoUsage": "PD-textlogo; trademark rights remain with bank",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "0 0 98 146.4"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 5,
+      "bankID": "ru-cbr-2673",
+      "brand": "Т-Банк",
+      "slug": "ru-tbank",
+      "website": "https://www.tbank.ru/",
+      "logoSource": "https://cdn.tbank.ru/static/pfa-multimedia/images/33447f85-5b92-42f9-8d88-509bd152b47c.svg",
+      "logoSourcePage": "https://www.tbank.ru/",
+      "logoOriginalSHA256": "b19f8d69f3f3c6852615e2089d231a16e3702c67d4d5d51baab720ec0798097c",
+      "logoResource": "ru-tbank.png",
+      "logoSHA256": "6296e9ad9b0cc8ac72ff62f5935db4fb6cc454cedd4afff2d5354af5ed86e2ef",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "mask": "dark"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 6,
+      "bankID": "ru-cbr-3349",
+      "brand": "Россельхозбанк",
+      "slug": "ru-rshb",
+      "website": "https://www.rshb.ru/",
+      "logoSource": "https://www.rshb.ru/android-icon-512x512.png",
+      "logoSourcePage": "https://www.rshb.ru/",
+      "logoOriginalSHA256": "0bf5ce2a0f07dc244c0e884f5605576950c9e6017d5a4c71ab57a726bd5d12e0",
+      "logoResource": "ru-rshb.png",
+      "logoSHA256": "47cb7bf4bc0d0de7c5ea0bbdac8cd60590bb7c1f1a57fa2f79a378633b2eecfd",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "RU",
+      "rank": 7,
+      "bankID": "ru-cbr-1978",
+      "brand": "Московский кредитный банк",
+      "slug": "ru-mkb",
+      "website": "https://mkb.ru/",
+      "logoSource": "https://ir.mkb.ru/Content/i/logo-en-new.png",
+      "logoSourcePage": "https://mkb.ru/",
+      "logoOriginalSHA256": "c3f011ab54cba7e8042c77fef7f7040906cddae5a95de1404dc45a71d7399ab8",
+      "logoResource": "ru-mkb.png",
+      "logoSHA256": "e15e77ed9f3d775aadf588c9befaee8d182103aeae7b83cf0f388e40c230f49b",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "crop": [
+          0,
+          0,
+          68,
+          68
+        ],
+        "mask": "nonwhite"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 8,
+      "bankID": "ru-cbr-2312",
+      "brand": "Банк ДОМ.РФ",
+      "slug": "ru-domrf",
+      "website": "https://domrfbank.ru/",
+      "logoSource": "https://domrfbank.ru/upload/images/logo/domrfbank_logo.png",
+      "logoSourcePage": "https://domrfbank.ru/",
+      "logoOriginalSHA256": "6412965f231973fc051d07c134b906bf10fcb03fd312d29f469e0060a5ab7641",
+      "logoResource": "ru-domrf.png",
+      "logoSHA256": "2ced6b958a1051f42f9fcdb85f10266becc540a86c7f6753420ae2fa1ea8131e",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "crop": [
+          350,
+          805,
+          328,
+          352
+        ],
+        "mask": "white"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 9,
+      "bankID": "ru-cbr-963",
+      "brand": "Совкомбанк",
+      "slug": "ru-sovcom",
+      "website": "https://sovcombank.ru/",
+      "logoSource": "https://upload.wikimedia.org/wikipedia/commons/0/0b/Scb_logo_rus.svg",
+      "logoSourcePage": "https://commons.wikimedia.org/wiki/File:Scb_logo_rus.svg",
+      "logoOriginalSHA256": "c909f264716be51e508b5a20aca73e9d379d49d9090070aa9e56fc816da27810",
+      "logoResource": "ru-sovcom.png",
+      "logoSHA256": "7237b54a91d54397513022fc76a66b679870ce46d65806ba44c88912e6f99930",
+      "logoUsage": "PD-textlogo; trademark rights remain with bank",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "135 229 80 80"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 10,
+      "bankID": "ru-cbr-3292",
+      "brand": "Райффайзенбанк",
+      "slug": "ru-raiffeisen",
+      "website": "https://www.raiffeisen.ru/",
+      "logoSource": "https://www.raiffeisen.ru/fav/icon.svg",
+      "logoSourcePage": "https://www.raiffeisen.ru/",
+      "logoOriginalSHA256": "d10befdbba057b662cb7f004d9e8d38c6c839abc1d9430e72a6179f29f1b4c27",
+      "logoResource": "ru-raiffeisen.png",
+      "logoSHA256": "8336d0a6e1fa6f35fb6ac5f0842247a87fe4491e58b4ad061890007333f4ec7d",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "mask": "dark"
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 11,
+      "bankID": "ru-cbr-2748",
+      "brand": "БМ-Банк",
+      "slug": "ru-bm",
+      "website": "https://www.bm-bank.ru/",
+      "logoSource": "https://static.rustore.ru/apk/1398463/content/ICON/ffd45b51-77b9-48df-b44c-76fcdbe2de20.png",
+      "logoSourcePage": "https://www.rustore.ru/catalog/app/com.openbank",
+      "logoOriginalSHA256": "afb4e4a9330127e884936d73705b07ac71948ae143f7549f764e848bbb4577f7",
+      "logoResource": "ru-bm.png",
+      "logoSHA256": "8fd58d5bb6c3d775232d18bbca6f3f6d00e7a510423ca2870ac5f45728d860eb",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "ru-bm-extra9.png",
+        "crop": [
+          107,
+          167,
+          402,
+          351
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 12,
+      "bankID": "ru-cbr-2546",
+      "brand": "НОВИКОМ",
+      "slug": "ru-novikom",
+      "website": "https://novikom.ru/",
+      "logoSource": "https://static.rustore.ru/apk/1705373631/content/ICON/f01a8154-7c1a-4ee3-a265-7669630e8883.png",
+      "logoSourcePage": "https://www.rustore.ru/catalog/app/com.bssys.novikomretail",
+      "logoOriginalSHA256": "6f3014a49ce69db096917db66405143fba6bf5685842c34e2117435c14dfb13f",
+      "logoResource": "ru-novikom.png",
+      "logoSHA256": "19bbe3892d730e0a877bd8c342f409e6fb981e987e4d84199178c6880f4053f7",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "ru-novikom-extra9.png",
+        "crop": [
+          79,
+          108,
+          433,
+          404
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 13,
+      "bankID": "ru-cbr-328",
+      "brand": "Банк Россия",
+      "slug": "ru-rossiya",
+      "website": "https://abr.ru/",
+      "logoSource": "https://abr.ru/favicon.ico",
+      "logoSourcePage": "https://abr.ru/",
+      "logoOriginalSHA256": "f4ad46ab4a028901d3edc92efd02f638026fbd1aeeee40fe828b07b02a04d206",
+      "logoResource": "ru-rossiya.png",
+      "logoSHA256": "11702ea0951b17479e3debfa1b5916b4c0d468113ea9f6d1d5201a2069a90533",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "ru-rossiya-0.ico",
+        "crop": [
+          1,
+          4,
+          63,
+          63
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 14,
+      "bankID": "ru-cbr-436",
+      "brand": "Банк Санкт-Петербург",
+      "slug": "ru-bspb",
+      "website": "https://www.bspb.ru/",
+      "logoSource": "https://storage.yandexcloud.net/bucket-cms-prod-7ff1c333-51d7-4a2d-9e7d-9e26f8ee3b6e/logo_bspb_4cde446639.svg",
+      "logoSourcePage": "https://www.bspb.ru/",
+      "logoOriginalSHA256": "8bbe75414e3962fb0eb90d2470aeed1d3d0f05d7eba043b5620c3fd825c92ef7",
+      "logoResource": "ru-bspb.png",
+      "logoSHA256": "7ab7182591a569c2fec6657288a0c1575e877529870ba4a4740f87678ea78c90",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "alpha",
+        "sourceFile": "ru-bspb-3.png",
+        "crop": [
+          7,
+          0,
+          25,
+          32
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 15,
+      "bankID": "ru-cbr-2557",
+      "brand": "РенКап Банк",
+      "slug": "ru-rencap",
+      "website": "https://rencapbank.ru/",
+      "logoSource": "https://rencapbank.ru/favicon.ico?favicon.37_rjie4ew1p0.ico",
+      "logoSourcePage": "https://rencapbank.ru/",
+      "logoOriginalSHA256": "a3a1444aa2a0c5978b7eb6749a1fa7cdbdfe3c5e2f2ecc8770b02d8b974945b3",
+      "logoResource": "ru-rencap.png",
+      "logoSHA256": "bc07e966bfe7f78fef3f475b4bbd2c17759bd4c9ea2f380f6158c9a0e1b092db",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "ru-rencap-0.ico",
+        "crop": [
+          1,
+          8,
+          31,
+          24
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 16,
+      "bankID": "ru-cbr-2590",
+      "brand": "АК БАРС",
+      "slug": "ru-akbars",
+      "website": "https://www.akbars.ru/",
+      "logoSource": "https://upload.wikimedia.org/wikipedia/commons/archive/0/0f/20190809060254%21Ak_Bars_Bank_Logo.svg",
+      "logoSourcePage": "https://commons.wikimedia.org/wiki/File:Ak_Bars_Bank_Logo.svg",
+      "logoOriginalSHA256": "710ee2a0721510ffce8256de0f74457294ca2005e24e2d9944830c2611c745f8",
+      "logoResource": "ru-akbars.png",
+      "logoSHA256": "f042a3fc2b77a376682308bbb0f38d95ebc30b88840309a228957e7f7d39676e",
+      "logoUsage": "PD-textlogo; trademark rights remain with bank",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "green",
+        "sourceFile": "ru-akbars-extra9.svg",
+        "crop": [
+          2,
+          208,
+          511,
+          386
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 17,
+      "bankID": "ru-cbr-2766",
+      "brand": "ОТП Банк",
+      "slug": "ru-otp",
+      "website": "https://www.otpbank.ru/",
+      "logoSource": "https://www.otpbank.ru/favicon.ico",
+      "logoSourcePage": "https://www.otpbank.ru/favicon.ico",
+      "logoOriginalSHA256": "d4eca1fd11dc0888a5c618e3681dc8731f70775a78106c3c16cb321d5b2294e9",
+      "logoResource": "ru-otp.png",
+      "logoSHA256": "0f1bac754ce6f8119ac998098f8caa5220682762debf8f626ba0121620c99b3c",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "dark",
+        "sourceFile": "ru-otp-extra0.ico",
+        "crop": [
+          13,
+          16,
+          87,
+          87
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 18,
+      "bankID": "ru-cbr-3542",
+      "brand": "Ozon Банк",
+      "slug": "ru-ozon",
+      "website": "https://finance.ozon.ru/",
+      "logoSource": "https://finance.ozon.ru/favicon.ico",
+      "logoSourcePage": "https://finance.ozon.ru/favicon.ico",
+      "logoOriginalSHA256": "ec270b31e63cb36e41c02018bba71a0229d4568c302f583cefb21e4569d83a32",
+      "logoResource": "ru-ozon.png",
+      "logoSHA256": "3a0d893bfb1f3660c8e6fc6971e9c82da93e278002bfc9e16b6695fc851b4cc9",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "ru-ozon-extra0.ico",
+        "crop": [
+          17,
+          65,
+          236,
+          191
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 19,
+      "bankID": "ru-cbr-2275",
+      "brand": "Уралсиб",
+      "slug": "ru-uralsib",
+      "website": "https://www.uralsib.ru/",
+      "logoSource": "https://uralsib.ru/apple-touch-icon-180x180.png",
+      "logoSourcePage": "https://uralsib.ru/apple-touch-icon-180x180.png",
+      "logoOriginalSHA256": "a461d897948c4e52ad018e3be4a0a2517202a8c9e5f1c584ab9f77b405dea532",
+      "logoResource": "ru-uralsib.png",
+      "logoSHA256": "63d753adb40053f20e3e5a4b4e54012b220d266f8f73913d234bf0f9a617fafe",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "ru-uralsib-extra2.png",
+        "crop": [
+          35,
+          30,
+          145,
+          150
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "RU",
+      "rank": 20,
+      "bankID": "ru-cbr-2268",
+      "brand": "МТС Банк",
+      "slug": "ru-mts",
+      "website": "https://www.mtsbank.ru/",
+      "logoSource": "https://www.mtsbank.ru/upload/static/favicons/apple-touch-icon.png",
+      "logoSourcePage": "https://www.mtsbank.ru/",
+      "logoOriginalSHA256": "6f1a7dc7c7b6c05ea9fe95cc577db3fafd4ede340bbdd0a7e586379aa5e09834",
+      "logoResource": "ru-mts.png",
+      "logoSHA256": "f06329994074ea8c13324784abf7d8fde82f6d28e5d241d90f0e2edeae316b1b",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "ru-mts-2.png",
+        "crop": [
+          54,
+          40,
+          126,
+          140
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 1,
+      "bankID": "us-fdic-628",
+      "brand": "Chase",
+      "slug": "us-chase",
+      "website": "https://www.chase.com/",
+      "logoSource": "https://www.chase.com/content/dam/unified-assets/logo/chase/chase-logo/additional-file-formats/logo_chase_headerfooter.svg",
+      "logoSourcePage": "https://www.chase.com/",
+      "logoOriginalSHA256": "223b2225e3034e5bd670ca02415885f498a862c53092569ee2e2da5b7050946a",
+      "logoResource": "us-chase.png",
+      "logoSHA256": "6037b1a8d44c1cdb96c67097c52d6e76d3aabb64c0b89637822dcd8699197db2",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "101 0 25 24"
+      }
+    },
+    {
+      "country": "US",
+      "rank": 2,
+      "bankID": "us-fdic-3510",
+      "brand": "Bank of America",
+      "slug": "us-bofa",
+      "website": "https://www.bankofamerica.com/",
+      "logoSource": "https://www.bankofamerica.com/homepage/spa-assets/images/assets-images-global-favicon-safari-pinned-tab-CSX1aebeef6.svg",
+      "logoSourcePage": "https://www.bankofamerica.com/",
+      "logoOriginalSHA256": "b5230fa1fb95ab3f2de3d991db59fba31e914854c7eb33b928c3aa6c10ea9630",
+      "logoResource": "us-bofa.png",
+      "logoSHA256": "a35211ea8dc86eefc6a1be2b7b18f29cd489d6933eec80015563f4811f5f9b10",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "US",
+      "rank": 3,
+      "bankID": "us-fdic-7213",
+      "brand": "Citi",
+      "slug": "us-citi",
+      "website": "https://www.citi.com/",
+      "logoSource": "https://www.citi.com/cbol-hp-static-assets/assets/favicon.ico",
+      "logoSourcePage": "https://www.citi.com/",
+      "logoOriginalSHA256": "2f6d73a312361b30f573d8f97bf9b345f2316c3d8b40723592b3145e360f8c32",
+      "logoResource": "us-citi.png",
+      "logoSHA256": "1007d6cbbbae3949a02a588a74d2e87126cc06a8cc7b8f04f0fee28bd3caa617",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "US",
+      "rank": 4,
+      "bankID": "us-fdic-3511",
+      "brand": "Wells Fargo",
+      "slug": "us-wells",
+      "website": "https://www.wellsfargo.com/",
+      "logoSource": "https://www17.wellsfargomedia.com/assets/images/icons/apple-touch-icon_180x180.png",
+      "logoSourcePage": "https://www.wellsfargo.com/",
+      "logoOriginalSHA256": "d8bc4890eab7b2b6e69fb5c36f3ab072072c4c5b9b73432beb17d98c6938a4fa",
+      "logoResource": "us-wells.png",
+      "logoSHA256": "c223853dc2eeff7aecb2bf06587abc4961655b600918189ca937ede3a301cb28",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "mask": "white"
+      }
+    },
+    {
+      "country": "US",
+      "rank": 5,
+      "bankID": "us-fdic-33124",
+      "brand": "Goldman Sachs",
+      "slug": "us-goldman",
+      "website": "https://www.goldmansachs.com/",
+      "logoSource": "https://cdn.gs.com/images/goldman-sachs/v2/gs-favicon.svg",
+      "logoSourcePage": "https://www.goldmansachs.com/",
+      "logoOriginalSHA256": "089b14b21b1550d118a4d30fd43a0594b9c7601bfc141fa6bf291f9d189e99fc",
+      "logoResource": "us-goldman.png",
+      "logoSHA256": "14aba99233f3c420d1e5d4b6d7231ef091ae8b214a16a5fe1b8fac88cc8fd554",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "mask": "dark"
+      }
+    },
+    {
+      "country": "US",
+      "rank": 6,
+      "bankID": "us-fdic-6548",
+      "brand": "U.S. Bank",
+      "slug": "us-usbank",
+      "website": "https://www.usbank.com/",
+      "logoSource": "https://www.usbank.com/etc.clientlibs/ecm-global/clientlibs/clientlib-resources/resources/images/svg/logo-personal.svg",
+      "logoSourcePage": "https://www.usbank.com/",
+      "logoOriginalSHA256": "45af6b9ccb8c5611f81cc5f99761b96cf7f12647446c34b8f5069bc50f1b365a",
+      "logoResource": "us-usbank.png",
+      "logoSHA256": "0ee9073a637dfbafd19e8c16895e939aaf90f61638f63724e1c4fae0509fd8e9",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "0 0 90 72",
+        "mask": "red"
+      }
+    },
+    {
+      "country": "US",
+      "rank": 7,
+      "bankID": "us-fdic-4297",
+      "brand": "Capital One",
+      "slug": "us-capitalone",
+      "website": "https://www.capitalone.com/",
+      "logoSource": "https://www.capitalone.com/",
+      "logoSourcePage": "https://www.capitalone.com/",
+      "logoOriginalSHA256": "e3ed634868aeeea34ea6d057cae3a9155f5e7fab2b87ae4859e536405f1a16dd",
+      "logoResource": "us-capitalone.png",
+      "logoSHA256": "d2e2b8a4bd661c7d0f4d54bd3fc94368facd10cf18072f3e726eea2be311fb68",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "US",
+      "rank": 8,
+      "bankID": "us-fdic-6384",
+      "brand": "PNC",
+      "slug": "us-pnc",
+      "website": "https://www.pnc.com/",
+      "logoSource": "https://www.pnc.com/content/experience-fragments/pnc-com/en/navigation/pnc-navigation---main-menu/master/_jcr_content/root/container/image.coreimg.svg/1657336133655/pnc-logo-rev.svg",
+      "logoSourcePage": "https://www.pnc.com/en/personal-banking.html",
+      "logoOriginalSHA256": "b1b8be8cc5d74aa0963fffdd7c5f82ec42380a633616fe0bba277fa48bcd5ac8",
+      "logoResource": "us-pnc.png",
+      "logoSHA256": "b0cd8bcbb107240fa09adeffa8ff27083290466c1cecbdc86023fcb4822a310a",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "0 0 28 27.9",
+        "mask": "orange"
+      }
+    },
+    {
+      "country": "US",
+      "rank": 9,
+      "bankID": "us-fdic-9846",
+      "brand": "Truist",
+      "slug": "us-truist",
+      "website": "https://www.truist.com/",
+      "logoSource": "https://static.truist.com/content/dam/global-images/truist-logo-purple.svg",
+      "logoSourcePage": "https://www.truist.com/",
+      "logoOriginalSHA256": "ff098c451f2f9581bdc2c18af2377bce77b7761029561b0f6fa2344486096254",
+      "logoResource": "us-truist.png",
+      "logoSHA256": "fed29b35f2128640a5e4ed432a988590d773334efddfebc86e9fb92444a51e83",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "139 20 41 40"
+      }
+    },
+    {
+      "country": "US",
+      "rank": 10,
+      "bankID": "us-fdic-639",
+      "brand": "BNY",
+      "slug": "us-bny",
+      "website": "https://www.bny.com/",
+      "logoSource": "https://www.bny.com/content/dam/bnymellon/web/favicons/favicon-152.png",
+      "logoSourcePage": "https://www.bny.com/",
+      "logoOriginalSHA256": "2e5a530d1c10d241800820ee601ed4c2886c62287703f7d1a8744c22c10e2509",
+      "logoResource": "us-bny.png",
+      "logoSHA256": "5c1065cb6fee1a632524a4e913e3ac24b49714be6c4a25ca532e5f9c9ec5e63f",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "US",
+      "rank": 11,
+      "bankID": "us-fdic-32992",
+      "brand": "Morgan Stanley Bank",
+      "slug": "us-morganstanley",
+      "website": "https://www.morganstanley.com/",
+      "logoSource": "https://www.morganstanley.com/etc.clientlibs/msdotcomr4/clientlibs/components/site/resources/img/favicon-96x96.png",
+      "logoSourcePage": "https://www.morganstanley.com/",
+      "logoOriginalSHA256": "1dfc75d27f33ac40ccc5085b2e433878d8deef5a3789c0a2306372f51ad07ef4",
+      "logoResource": "us-morganstanley.png",
+      "logoSHA256": "99b6131caf2111fcad1f9ad55f77f5cbffd9ab65a6101d9f4b9dee66170d08ae",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "us-morganstanley-4.png",
+        "crop": [
+          10,
+          25,
+          86,
+          72
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 12,
+      "bankID": "us-fdic-14",
+      "brand": "State Street",
+      "slug": "us-statestreet",
+      "website": "https://www.statestreet.com/",
+      "logoSource": "https://www.statestreet.com/web/Homepage/images/state-street-logo-final.svg",
+      "logoSourcePage": "https://www.statestreet.com/web/Homepage/images/state-street-logo-final.svg",
+      "logoOriginalSHA256": "4b8f52fe7557ab0749b292981b771f0e27f752a8e352193ef72699da0c1abec9",
+      "logoResource": "us-statestreet.png",
+      "logoSHA256": "f6615b5336a81728ca89b9f4cd02d4ff8393b2ab5a55ea2bc1b61c3a3940b238",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "us-statestreet-extra3.svg",
+        "crop": [
+          0,
+          0,
+          140,
+          140
+        ],
+        "sourceCrop": [
+          0,
+          0,
+          140,
+          140
+        ]
+      }
+    },
+    {
+      "country": "US",
+      "rank": 13,
+      "bankID": "us-fdic-18409",
+      "brand": "TD Bank",
+      "slug": "us-td",
+      "website": "https://www.td.com/us/en/personal-banking",
+      "logoSource": "https://www.td.com/content/dam/tdb/images/navigation-header-and-footer/td-logo-desktop.png",
+      "logoSourcePage": "https://www.td.com/us/en/personal-banking",
+      "logoOriginalSHA256": "65bc536eeffc16faaea22b52980471f0febc6b3edc056b17dd9282a0b78e5379",
+      "logoResource": "us-td.png",
+      "logoSHA256": "0747e8c0ac93d48d1baa5462d5fd67f7950394dea878835f0ee797d1b2d75081",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "us-td-2.png",
+        "crop": [
+          9,
+          24,
+          79,
+          70
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 14,
+      "bankID": "us-fdic-6672",
+      "brand": "Fifth Third Bank",
+      "slug": "us-fifththird",
+      "website": "https://www.53.com/",
+      "logoSource": "https://www.53.com/",
+      "logoSourcePage": "https://www.53.com/",
+      "logoOriginalSHA256": "430d81ae066d310526947d143533cbb8120ee578ca1da47adc7060e6a5b17bd8",
+      "logoResource": "us-fifththird.png",
+      "logoSHA256": "943a14f5334c99562089887a3c08ebe72f43b5ec8c52dc39c41c8c999ca30adc",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "us-fifththird-0.svg",
+        "crop": [
+          27,
+          25,
+          485,
+          430
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 15,
+      "bankID": "us-fdic-6560",
+      "brand": "Huntington",
+      "slug": "us-huntington",
+      "website": "https://www.huntington.com/",
+      "logoSource": "https://d1io3yog0oux5.cloudfront.net/_4b131656e1ad2a38b638b175aeb93332/huntington/files/theme/images/favicons/apple-touch-icon.png",
+      "logoSourcePage": "https://d1io3yog0oux5.cloudfront.net/_4b131656e1ad2a38b638b175aeb93332/huntington/files/theme/images/favicons/apple-touch-icon.png",
+      "logoOriginalSHA256": "494d7cb004081b65dfc0a5cb33df33705e1e1afc1f4eee8906c8135d6c0f657b",
+      "logoResource": "us-huntington.png",
+      "logoSHA256": "f264db823aa9790b74e1c0d839a32f35c5327762c51713006bf8fc7255ad2c22",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "alpha",
+        "sourceFile": "us-huntington-extra2.png",
+        "crop": [
+          15,
+          7,
+          165,
+          173
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 16,
+      "bankID": "us-fdic-16571",
+      "brand": "BMO",
+      "slug": "us-bmo",
+      "website": "https://www.bmo.com/en-us/main/personal/",
+      "logoSource": "https://www.bmo.com/dist/images/logos/bmo-blue-on-transparent-en.svg",
+      "logoSourcePage": "https://www.bmo.com/en-us/main/personal/",
+      "logoOriginalSHA256": "da3dc7a279a3f9e10d0beb1f4f0fc4f61cbe517b3bef7954bb1a9412cd242edf",
+      "logoResource": "us-bmo.png",
+      "logoSHA256": "f79616fdff242627372ac85a9eca9b2b20c25ec82f3e2fd99de2df1b556b8a9a",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "us-bmo-5.svg",
+        "crop": [
+          379,
+          40,
+          462,
+          126
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 17,
+      "bankID": "us-fdic-34221",
+      "brand": "Morgan Stanley Private Bank",
+      "slug": "us-morganstanley-private",
+      "website": "https://us.etrade.com/",
+      "logoSource": "https://www.morganstanley.com/etc.clientlibs/msdotcomr4/clientlibs/components/site/resources/img/favicon-96x96.png",
+      "logoSourcePage": "https://www.morganstanley.com/",
+      "logoOriginalSHA256": "1dfc75d27f33ac40ccc5085b2e433878d8deef5a3789c0a2306372f51ad07ef4",
+      "logoResource": "us-morganstanley-private.png",
+      "logoSHA256": "99b6131caf2111fcad1f9ad55f77f5cbffd9ab65a6101d9f4b9dee66170d08ae",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "us-morganstanley-4.png",
+        "crop": [
+          10,
+          25,
+          86,
+          72
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 18,
+      "bankID": "us-fdic-11063",
+      "brand": "First Citizens",
+      "slug": "us-firstcitizens",
+      "website": "https://www.firstcitizens.com/",
+      "logoSource": "https://www.firstcitizens.com/etc.clientlibs/firstcitizens/clientlibs/clientlib-aem/resources/favicon/apple-touch-icon.png?v=2",
+      "logoSourcePage": "https://www.firstcitizens.com/",
+      "logoOriginalSHA256": "a5576837453465529b84c7a48c3a77bd120a73140a94c7afd00c1d4fd374761b",
+      "logoResource": "us-firstcitizens.png",
+      "logoSHA256": "3c8580a2e7f0b3b15e8183fc4513a70b98b8c5c163732ce83256b15b9515d23c",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "us-firstcitizens-3.png",
+        "crop": [
+          8,
+          14,
+          162,
+          180
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "US",
+      "rank": 19,
+      "bankID": "us-fdic-57957",
+      "brand": "Citizens",
+      "slug": "us-citizens",
+      "website": "https://www.citizensbank.com/",
+      "logoSource": "https://www.citizensbank.com/assets/CB_resources/images/cbds-logos/logo-citizens__horz-green.svg",
+      "logoSourcePage": "https://www.citizensbank.com/homepage.aspx",
+      "logoOriginalSHA256": "18a46c030dfc7963c3dad6773aacc7c942e6106bf238c503a6cfddada8e6c84c",
+      "logoResource": "us-citizens.png",
+      "logoSHA256": "30332603f943434943b27531ee6c8ac48f56ae6844ea8d0b704f8b8c801c9563",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "us-citizens-4.svg",
+        "crop": [
+          0,
+          0,
+          85,
+          84
+        ],
+        "sourceCrop": [
+          0,
+          0,
+          85,
+          85
+        ]
+      }
+    },
+    {
+      "country": "US",
+      "rank": 20,
+      "bankID": "us-fdic-588",
+      "brand": "M&T Bank",
+      "slug": "us-mt",
+      "website": "https://www.mtb.com/",
+      "logoSource": "https://www.mtb.com/content/dam/mtb-web/mtb-icon-library/favicon.ico",
+      "logoSourcePage": "https://www.mtb.com/",
+      "logoOriginalSHA256": "acfa0cc8b42493333d9032c79e4d91d7bbdd40995a283a3945075da6fb2f3cfb",
+      "logoResource": "us-mt.png",
+      "logoSHA256": "345f8adf9dc7087be76e68d52860e41f165f92dafb56a6e3058848b1da547389",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "us-mt-0.png",
+        "crop": [
+          0,
+          95,
+          300,
+          203
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 1,
+      "bankID": "gb-pra-765112",
+      "brand": "HSBC",
+      "slug": "gb-hsbc",
+      "website": "https://www.hsbc.co.uk/",
+      "logoSource": "https://www.hsbc.co.uk/etc.clientlibs/dpws/clientlibs-public/clientlib-site/resources/favicons/safari-pinned-tab.svg",
+      "logoSourcePage": "https://www.hsbc.co.uk/",
+      "logoOriginalSHA256": "23a8acd97df7b33042f0b0937328282bfcd7ae48f59e7cce93ff70bb48edb8bb",
+      "logoResource": "gb-hsbc.png",
+      "logoSHA256": "7820a534fdb5bbf1f5d0e06e9cff7ef8d84010b012b5530cc4707a422e7bfb5a",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "GB",
+      "rank": 2,
+      "bankID": "gb-pra-759676",
+      "brand": "Barclays",
+      "slug": "gb-barclays",
+      "website": "https://www.barclays.co.uk/",
+      "logoSource": "https://www.barclays.co.uk/content/dam/icons/favicons/barclays/Eagle_RGB_Cyan_Large.svg",
+      "logoSourcePage": "https://www.barclays.co.uk/",
+      "logoOriginalSHA256": "5c3642c47273bc0fc999c3f35f32255f14530aea6f6f9ce8d4c25afcefabd93b",
+      "logoResource": "gb-barclays.png",
+      "logoSHA256": "b6fa81219b1fc08842ec378798919adc761756cca1b2242038406037b8018c3b",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "GB",
+      "rank": 3,
+      "bankID": "gb-pra-119278",
+      "brand": "Lloyds Bank",
+      "slug": "gb-lloyds",
+      "website": "https://www.lloydsbank.com/",
+      "logoSource": "https://www.lloydsbank.com/",
+      "logoSourcePage": "https://www.lloydsbank.com/",
+      "logoOriginalSHA256": "f93486386e65da7fd6a446cc1bd8daf352d18a89d2a7f06fdd8886e4080f45ac",
+      "logoResource": "gb-lloyds.png",
+      "logoSHA256": "b0de121dda9d39e73e769ea4d8a9b60c54b23bd2d2ddd1f5b013d8396f1b533d",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "0 0 70 62"
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 4,
+      "bankID": "gb-pra-114276",
+      "brand": "Standard Chartered",
+      "slug": "gb-standardchartered",
+      "website": "https://www.sc.com/",
+      "logoSource": "https://www.sc.com/en/content/themes/standard-chartered-corporate-affairs/src/images/site-icons/safari-pinned-tab.svg",
+      "logoSourcePage": "https://www.sc.com/",
+      "logoOriginalSHA256": "24b0394d7624eab604f7cc5c6c0a4debd027113aaa58e2ef3134b68d8cb9088e",
+      "logoResource": "gb-standardchartered.png",
+      "logoSHA256": "aa66e3aa99217adb8981562c3c648a702ab815dc3c66fee8d266686481fdbc5b",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "GB",
+      "rank": 5,
+      "bankID": "gb-pra-121878",
+      "brand": "NatWest",
+      "slug": "gb-natwest",
+      "website": "https://www.natwest.com/",
+      "logoSource": "https://www.natwest.com/content/dam/championlogos/Natwest_Secondary_Horizontal_RGB_NEG.svg",
+      "logoSourcePage": "https://www.natwest.com/",
+      "logoOriginalSHA256": "c6ce36530e316afc2574123466d7aff22be8e31d27369fcb02b4d6e95d9a8830",
+      "logoResource": "gb-natwest.png",
+      "logoSHA256": "f437a0d753c2daa69acfb4e7a8e66364cf456e19225bc646fc16b7d502bff371",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "0 0 100 100",
+        "mask": "red"
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 6,
+      "bankID": "gb-pra-106078",
+      "brand": "Nationwide",
+      "slug": "gb-nationwide",
+      "website": "https://www.nationwide.co.uk/",
+      "logoSource": "https://www.nationwide.co.uk/_next/static/images/favicon-196x196-cd2f6861bb4f2a844f266d945ef58cc1.png",
+      "logoSourcePage": "https://www.nationwide.co.uk/",
+      "logoOriginalSHA256": "d0237b211a246263eb20712faf3e6d7a0b37f5551bd16f5ac8a01c32bc96a838",
+      "logoResource": "gb-nationwide.png",
+      "logoSHA256": "6f94796033c2ca2243495e41370ad5484426760c4df4913a8c76ec228a3f7b4b",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "mask": "red"
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 7,
+      "bankID": "gb-pra-106054",
+      "brand": "Santander UK",
+      "slug": "gb-santander",
+      "website": "https://www.santander.co.uk/",
+      "logoSource": "https://www.santander.co.uk/themes/custom/santander_web18_2_0/logo.svg",
+      "logoSourcePage": "https://www.santander.co.uk/",
+      "logoOriginalSHA256": "355e6be0b9b189e354f5602a2b9af2538cf5203d852fd14ef5fc15150fb769ea",
+      "logoResource": "gb-santander.png",
+      "logoSHA256": "7943b8b4ed4326cf6a2b3f3828494ea5797d9ea78cf5ce264c817e9d97e43e9d",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "0 0 144 144"
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 8,
+      "bankID": "gb-pra-121873",
+      "brand": "Virgin Money",
+      "slug": "gb-virgin",
+      "website": "https://uk.virginmoney.com/",
+      "logoSource": "https://uk.virginmoney.com/assets/svg/logo.svg",
+      "logoSourcePage": "https://uk.virginmoney.com/",
+      "logoOriginalSHA256": "d363dd1173c872a6902155542d6792f2b76fc08138caa1688f27aff8768e0c00",
+      "logoResource": "gb-virgin.png",
+      "logoSHA256": "56755898e925f488fcfd348b00462d8eb164eb135d028620fa17411f949abc3d",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {}
+    },
+    {
+      "country": "GB",
+      "rank": 9,
+      "bankID": "gb-pra-150892",
+      "brand": "Coventry Building Society",
+      "slug": "gb-coventry",
+      "website": "https://www.coventrybuildingsociety.co.uk/",
+      "logoSource": "https://www.bsa.org.uk/getmedia/b6a05770-d59d-454e-8a31-979cb49718e6/BSA_Yearbook_2025-26-digital-FINAL.pdf",
+      "logoSourcePage": "https://www.bsa.org.uk/getmedia/b6a05770-d59d-454e-8a31-979cb49718e6/BSA_Yearbook_2025-26-digital-FINAL.pdf#page=31",
+      "logoOriginalSHA256": "794963ffdb93ddbffa6a7a7cc86500312a8ba8d131381ea206ab1641affaeb42",
+      "logoResource": "gb-coventry.png",
+      "logoSHA256": "3e263eb17030a92fbbd2a161623d1e5c3ac43376d2fd7455a2df31c63d0012be",
+      "logoUsage": "Bank trademark reproduced in the official BSA member profile, 2025/26 yearbook p.29 (PDF page 31). Offline bank identification only; trademark belongs to Coventry Building Society. No affiliation or open license is claimed. BeeSave adapts display colour and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "pdfPage": 31,
+        "embeddedResource": "Im0.jp2",
+        "crop": [
+          177,
+          0,
+          79,
+          78
+        ],
+        "mask": "blue",
+        "display": "BeeSave template, teal on honey"
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 10,
+      "bankID": "gb-pra-106085",
+      "brand": "Yorkshire Building Society",
+      "slug": "gb-yorkshire",
+      "website": "https://www.ybs.co.uk/",
+      "logoSource": "https://www.ybs.co.uk/documents/100493/612386/ybs-logo.svg",
+      "logoSourcePage": "https://www.ybs.co.uk/",
+      "logoOriginalSHA256": "f3bb10dcc862ff07d66a9b510f7b675996ae953495900e662c4825bba268c684",
+      "logoResource": "gb-yorkshire.png",
+      "logoSHA256": "42e92c3499223d78dca1fba9113fcc549ee42eac31fd91d29f1e616d571ef31b",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-06",
+      "transformation": {
+        "viewBox": "45 45 160 155"
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 11,
+      "bankID": "gb-pra-981170",
+      "brand": "Revolut",
+      "slug": "gb-revolut",
+      "website": "https://www.revolut.com/",
+      "logoSource": "https://developer.revolut.com/assets/oba/Main%28Retail%29-Logo-package.zip",
+      "logoSourcePage": "https://developer.revolut.com/docs/resources/open-banking-logo-guidelines",
+      "logoOriginalSHA256": "af6f517e376d5765a6a7c8f9ffc6eb2e3e07b1752ceaec01a8e5984c6c82b659",
+      "logoResource": "gb-revolut.png",
+      "logoSHA256": "747fa862301f1eebbc8d02fce987e2857fda32f99174531dfaae993a970dcd33",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "gb-revolut-package0.svg",
+        "crop": [
+          133,
+          81,
+          412,
+          431
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 12,
+      "bankID": "gb-pra-153706",
+      "brand": "Skipton",
+      "slug": "gb-skipton",
+      "website": "https://www.skipton.co.uk/",
+      "logoSource": "https://www.skipton.co.uk/etc.clientlibs/sbs-sites/clientlibs/clientlib-site/resources/apple-touch-icon-120x120.png",
+      "logoSourcePage": "https://www.skipton.co.uk/",
+      "logoOriginalSHA256": "3b0b97011eb0ffc7fedcfae74c5bd5a5d3be4b86b91f958c6eb9c1068e42ce7a",
+      "logoResource": "gb-skipton.png",
+      "logoSHA256": "89cd05229a72685cf6b0cec80b8edd8a22e117a15258b69adc761255a8978571",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "alpha",
+        "sourceFile": "gb-skipton-2.png",
+        "crop": [
+          5,
+          23,
+          115,
+          97
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 13,
+      "bankID": "gb-pra-164992",
+      "brand": "Leeds Building Society",
+      "slug": "gb-leeds",
+      "website": "https://www.leedsbuildingsociety.co.uk/",
+      "logoSource": "https://www.leedsbuildingsociety.co.uk/_resources/img/favicon.ico",
+      "logoSourcePage": "https://www.leedsbuildingsociety.co.uk/",
+      "logoOriginalSHA256": "f4cd02c91639cee809fd33386d5b3eefc54a0454cc7794b375a684b44229dc21",
+      "logoResource": "gb-leeds.png",
+      "logoSHA256": "425b3cdeb77c0f511c374fa5e3cf8b782cb49c72a1c69e1206165e1bf224b3f4",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "bright",
+        "sourceFile": "gb-leeds-0.ico",
+        "crop": [
+          2,
+          2,
+          30,
+          28
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 14,
+      "bankID": "gb-pra-204574",
+      "brand": "Shawbrook",
+      "slug": "gb-shawbrook",
+      "website": "https://www.shawbrook.co.uk/",
+      "logoSource": "https://www.shawbrook.co.uk/apple-touch-icon.png",
+      "logoSourcePage": "https://www.shawbrook.co.uk/",
+      "logoOriginalSHA256": "c3ea686f86a682d819e77ec1a028f64f8ee02fd04e07d60993dc23c0a4d04be0",
+      "logoResource": "gb-shawbrook.png",
+      "logoSHA256": "baf0cf39f393b817ba561f6f7b379580b5c89ec219a90723a149f9cc286c4b9e",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "gb-shawbrook-1.png",
+        "crop": [
+          40,
+          13,
+          140,
+          167
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 15,
+      "bankID": "gb-pra-604551",
+      "brand": "Paragon Bank",
+      "slug": "gb-paragon",
+      "website": "https://www.paragonbank.co.uk/",
+      "logoSource": "https://www.paragonbank.co.uk/img/pargon_logo_black.png?19315",
+      "logoSourcePage": "https://www.paragonbank.co.uk/",
+      "logoOriginalSHA256": "a51bfb7401cd8c0b8286ad40288f5f71c72344ce98cb9bf11cd3655681cda5a5",
+      "logoResource": "gb-paragon.png",
+      "logoSHA256": "c5434a9510ee7e9d437a5971d7b2d582bb7a4cccf3dcbaf595232f4dc661ad30",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "gb-paragon-official.png",
+        "crop": [
+          0,
+          0,
+          359,
+          133
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 16,
+      "bankID": "gb-pra-512956",
+      "brand": "Bank of Ireland UK",
+      "slug": "gb-boi",
+      "website": "https://www.bankofirelanduk.com/",
+      "logoSource": "https://boi-public-assets.s3-eu-west-1.amazonaws.com/images/icons/apple-touch-icon.png",
+      "logoSourcePage": "https://www.bankofirelanduk.com/personal/",
+      "logoOriginalSHA256": "96bf673cd2058e3f15ed6948ef164b364d3c3a9773a06b78735b690e627905b6",
+      "logoResource": "gb-boi.png",
+      "logoSHA256": "0cf01b02c41525e5c7662d78f627c35cde33c1a5f8ede8b4271dc8ac247d530e",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "gb-boi-3.png",
+        "crop": [
+          35,
+          43,
+          144,
+          142
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 17,
+      "bankID": "gb-pra-124750",
+      "brand": "Close Brothers",
+      "slug": "gb-closebrothers",
+      "website": "https://www.closebrothers.com/",
+      "logoSource": "https://www.closebrothers.com/group/s/sfsites/c/resource/CloseBrothersLogo",
+      "logoSourcePage": "https://www.closebrothers.com/s/",
+      "logoOriginalSHA256": "e505905b0b99a07a4efa3392717ddc114f3289ce6f032eda15880c50966f63cf",
+      "logoResource": "gb-closebrothers.png",
+      "logoSHA256": "df5ba649df9ffde5d0ec8fbf2fa32bd03377bb5294124c8167ca12e23f404552",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "ink",
+        "sourceFile": "gb-closebrothers-official.svg",
+        "crop": [
+          3,
+          3,
+          87,
+          86
+        ],
+        "sourceCrop": [
+          0,
+          0,
+          88,
+          89
+        ]
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 18,
+      "bankID": "gb-pra-155998",
+      "brand": "Principality",
+      "slug": "gb-principality",
+      "website": "https://www.principality.co.uk/",
+      "logoSource": "https://www.principality.co.uk/assets/favicons/safari-pinned-tab.svg",
+      "logoSourcePage": "https://www.principality.co.uk/",
+      "logoOriginalSHA256": "fcb472d8fe2f4b62a33eef4441ace63d5435981c3428650c3be8093ad1fdbb32",
+      "logoResource": "gb-principality.png",
+      "logoSHA256": "d4b3d1c4803d28efcefecd69674012080e635331aedbed05801c271b009f9e34",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "alpha",
+        "sourceFile": "gb-principality-2.svg",
+        "crop": [
+          74,
+          66,
+          438,
+          446
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 19,
+      "bankID": "gb-pra-104877",
+      "brand": "West Brom",
+      "slug": "gb-westbrom",
+      "website": "https://www.westbrom.co.uk/",
+      "logoSource": "https://www.westbrom.co.uk/wbbsAssets/img/favicons/apple-touch-icon-60x60.png",
+      "logoSourcePage": "https://www.westbrom.co.uk/",
+      "logoOriginalSHA256": "13357336ab78e561c58a73cba8570e2beadc0be5e155692283a56ac8b3c29d8d",
+      "logoResource": "gb-westbrom.png",
+      "logoSHA256": "5d3fe7bd550af3efa0bb1cb4bf8f11f99c5a5437ba655928572b17e631996672",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "white",
+        "sourceFile": "gb-westbrom-4.png",
+        "crop": [
+          10,
+          23,
+          50,
+          40
+        ],
+        "sourceCrop": null
+      }
+    },
+    {
+      "country": "GB",
+      "rank": 20,
+      "bankID": "gb-pra-200785",
+      "brand": "Nottingham",
+      "slug": "gb-nottingham",
+      "website": "https://www.thenottingham.com/",
+      "logoSource": "https://www.thenottingham.com/android-chrome-192x192.png",
+      "logoSourcePage": "https://www.thenottingham.com/",
+      "logoOriginalSHA256": "69f90370e0bf3aad61c114cffdd5c78715c5403b3ca80fe82ef6e2833b585fd6",
+      "logoResource": "gb-nottingham.png",
+      "logoSHA256": "38ead58947a0d375251e33dd7571d71778b7f92ec9cf481089e4c0c3fcc1c7b3",
+      "logoUsage": "Official public bank mark; local bank identification only. Trademark belongs to the bank; no affiliation or open license is claimed. BeeSave adapts display color and container while retaining mark geometry.",
+      "logoCheckedOn": "2026-10-07",
+      "transformation": {
+        "mask": "dark",
+        "sourceFile": "gb-nottingham-0.png",
+        "crop": [
+          32,
+          27,
+          160,
+          165
+        ],
+        "sourceCrop": null
+      }
+    }
+  ]
+}

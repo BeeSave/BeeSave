@@ -69,6 +69,15 @@ public enum AppUpdateResult: Equatable, Sendable {
     case current, noRelease, available(AppUpdateManifest), incompatible(AppUpdateManifest)
 }
 
+public struct InstallUpdateRelease: Equatable, Sendable {
+    public let manifest: AppUpdateManifest
+    public let feedURL: URL
+    public let archiveURL: URL
+}
+public enum InstallUpdateResult: Equatable, Sendable {
+    case current, noRelease, available(InstallUpdateRelease), incompatible(AppUpdateManifest)
+}
+
 public enum AppUpdateURLs {
     public static let latest = URL(string: "https://api.github.com/repos/BeeSave/BeeSave/releases/latest")!
     public static func allows(_ url: URL) -> Bool {
@@ -186,6 +195,38 @@ public final class AppUpdateClient: @unchecked Sendable {
         let tag_name: String, draft: Bool, prerelease: Bool
         let assets: [Asset]
         struct Asset: Decodable { let name: String, browser_download_url: URL }
+    }
+    /// Resolve API and manifest once, then retain the exact tag for the entire
+    /// installation. A second "latest" request could silently select another tag.
+    public func checkInstall(version: String, build: Int, macOS: String, architecture: String) async throws -> InstallUpdateResult {
+        let data: Data
+        do { data = try await transport.data(from: AppUpdateURLs.latest, limit: 1_048_576) }
+        catch AppUpdateError.http(404) { return .noRelease }
+        try Task.checkCancellation()
+        do {
+            let release = try JSONDecoder().decode(Release.self, from: data)
+            guard !release.draft, !release.prerelease, release.tag_name.hasPrefix("v") else { throw AppUpdateError.invalidMetadata }
+            _ = try AppVersion(String(release.tag_name.dropFirst()))
+            let prefix = "https://github.com/BeeSave/BeeSave/releases/download/\(release.tag_name)/"
+            func asset(_ name: String) throws -> URL {
+                let matches = release.assets.filter { $0.name == name }
+                guard matches.count == 1, matches[0].browser_download_url.absoluteString == prefix + name else { throw AppUpdateError.invalidMetadata }
+                return matches[0].browser_download_url
+            }
+            let manifestURL = try asset("latest.json")
+            let zip = try asset("BeeSave-macos-arm64.zip")
+            let bytes = try await transport.data(from: manifestURL, limit: 65_536)
+            let manifest = try JSONDecoder().decode(AppUpdateManifest.self, from: bytes)
+            try manifest.validate()
+            guard manifest.tag == release.tag_name, manifest.assetURL == zip else { throw AppUpdateError.invalidMetadata }
+            guard try manifest.isNewer(than: version, build: build) else { return .current }
+            guard try manifest.isCompatible(macOS: macOS, architecture: architecture) else { return .incompatible(manifest) }
+            let feed = try asset("appcast.xml"), archive = try asset("BeeSave-macos-arm64.dmg")
+            _ = try asset("BeeSave-macos-arm64.dmg.sha256")
+            _ = try asset("BeeSave-macos-arm64.zip.sha256")
+            try Task.checkCancellation()
+            return .available(InstallUpdateRelease(manifest: manifest, feedURL: feed, archiveURL: archive))
+        } catch is DecodingError { throw AppUpdateError.invalidMetadata }
     }
     public func check(version: String, build: Int, macOS: String, architecture: String) async throws -> AppUpdateResult {
         let data: Data

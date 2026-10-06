@@ -78,7 +78,12 @@ public final class RateClient: @unchecked Sendable {
         }
         throw last
     }
-    public func cbr(on day: Day? = nil) async throws -> [FXRate] { try RateProvider.parseCBR(await download(RateProvider.cbrURL(on: day)), requested: day ?? .today) }
+    public func cbr(on day: Day? = nil) async throws -> [FXRate] {
+        // The latest registered publication can already be effective tomorrow.
+        // Request the effective day explicitly and keep it fixed across midnight.
+        let requested = day ?? .today
+        return try RateProvider.parseCBR(await download(RateProvider.cbrURL(on: requested)), requested: requested)
+    }
     public func fetch(base: String, quote: String, on day: Day? = nil) async throws -> FXRate {
         if let values = try? await cbr(on: day), let value = try Reports.rate(from: base, to: quote, rates: values, on: day ?? .today), let date = values.first?.date { return FXRate(base: base, quote: quote, rate: value, date: date, provider: "Банк России") }
         try Task.checkCancellation()

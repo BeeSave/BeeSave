@@ -16,6 +16,6 @@ public enum DisplayFormat {
         return formatter.string(from: NSDecimalNumber(decimal: decimal)) ?? text
     }
     public static func valuation(_ value: Valuation, currency: String) -> String {
-        money(value.known, currency: currency) + (value.partial ? " · частично (без курса: \(value.missing.count))" : "")
+        money(value.known, currency: currency) + (value.partial ? " · частично (\(value.partialDescription))" : "")
     }
 }

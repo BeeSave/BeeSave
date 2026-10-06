@@ -95,17 +95,18 @@ struct PartialStatus: View {
     @EnvironmentObject private var model: AppModel
     @State private var details = false
     var body: some View {
-        Button { details = true } label: { Label("Частично · без курса: \(value.missing.count)", systemImage: "exclamationmark.triangle") }.buttonStyle(.plain).font(.caption).foregroundStyle(BeeStyle.warning)
+        Button { details = true } label: { Label("Частично · " + value.partialDescription, systemImage: "exclamationmark.triangle") }.buttonStyle(.plain).font(.caption).foregroundStyle(BeeStyle.warning)
             .popover(isPresented: $details) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Не хватает курсов").font(.headline)
-                    Text("Не оценено: \(value.missing.count). Валюты: \(value.currencies.sorted().joined(separator: ", ")).")
+                    Text("Неполный итог").font(.headline)
+                    if !value.missing.isEmpty { Text("Без курса: \(value.missing.count). Валюты: \(value.currencies.sorted().joined(separator: ", ")).") }
+                    if !value.missingConditions.isEmpty { Text("Есть неизвестные условия, налог или состав долга. Уточните договоры и банковские суммы."); Button("Открыть финансовый календарь") { details = false; model.section = .financialCalendar } }
                     let missing = Set(value.missing); let operations = model.db?.operations.filter { missing.contains($0.id) } ?? []
                     if !operations.isEmpty {
                         Text("Для пересчёта нужен снимок курса в самой операции.").font(.caption).foregroundStyle(BeeStyle.muted)
                         Button("Открыть операции без курса") { details = false; let ids = operations.map(\.id); if let onMissingOperations { onMissingOperations(ids) } else { model.showOperations(ids, title: "Операции без курса") } }
                     }
-                    SettingsLink { Text(operations.isEmpty ? "Добавить справочный курс" : "Открыть курсы и инструкции") }.simultaneousGesture(TapGesture().onEnded { details = false; model.settingsTask = .rates })
+                    if !value.missing.isEmpty { SettingsLink { Text(operations.isEmpty ? "Добавить справочный курс" : "Открыть курсы и инструкции") }.simultaneousGesture(TapGesture().onEnded { details = false; model.settingsTask = .rates }) }
                     Button("Закрыть") { details = false }.keyboardShortcut(.cancelAction)
                 }.padding(20).frame(width: 330).foregroundStyle(BeeStyle.text).background(BeeStyle.surface)
             }

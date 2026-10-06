@@ -89,12 +89,12 @@ public enum EditorContext {
     }
     public static func changingDataset(_ report: Report, to dataset: Dataset, database: Database? = nil) -> (Report, [String]) {
         var candidate = report; candidate.dataset = dataset; var removed: [String] = []
-        if dataset == .balances {
+        if dataset != .flows {
             if !report.filters.categories.isEmpty { removed.append("Категории") }
             if report.filters.projectID != nil { removed.append("Проект") }
             if report.filters.participation != .all { removed.append("Участие в бюджетах") }
             candidate.filters.categories = []; candidate.filters.projectID = nil; candidate.filters.participation = .all
-            candidate.metric = .balance
+            candidate.metric = dataset == .financialPlan ? .payment : dataset == .depositYield ? .yield : .balance
             if ![Grouping.day, .month, .account].contains(candidate.grouping) { removed.append("Группировка"); candidate.grouping = .account }
         } else { candidate.metric = .expense }
         if candidate.presentation == .line && ![Grouping.day, .month].contains(candidate.grouping) { candidate.presentation = .table }

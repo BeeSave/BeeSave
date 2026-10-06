@@ -47,6 +47,7 @@ struct EditorFrame<Content: View>: View {
     var isDirty = true
     var width: CGFloat = 580
     var height: CGFloat = 590
+    var tintColor: Color = BeeStyle.honey
     var onError: (String) -> Void = { _ in }
     var saveAsync: (() async throws -> Void)? = nil
     var save: () throws -> Void
@@ -73,8 +74,9 @@ struct EditorFrame<Content: View>: View {
                 Button("Отмена") { if isDirty { discard = true } else { dismiss() } }.keyboardShortcut(.cancelAction)
                 Button(saveTitle, action: submit).buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(!canSave || model.busy || submitting)
             }.padding(20)
-        }.frame(width: width, height: height).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.honey)
+        }.frame(width: width, height: height).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(tintColor)
             .interactiveDismissDisabled(isDirty)
+            .modifier(UpdateFormGuard(active: true))
             .onDisappear { submitTask?.cancel() }
             .confirmationDialog("Сохранить изменения перед закрытием?", isPresented: $discard) {
                 Button("Сохранить", action: submit).disabled(!canSave || model.busy || submitting)

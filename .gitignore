@@ -11,13 +11,13 @@ Dist/*.dmg
 Dist/*.xml
 Verification/*.log
 
-# Local development documents and design drafts
+# Local project instructions and SDD materials; tracked files need separate exclusion before publishing.
 /AGENTS.md
 /SPEC.md
 /PLAN.md
 /ACCEPTANCE.md
 /BeeSave APP.md
-/RELEASES.md
 /specs/
 /Verification/
+/RELEASES.md
 /Design/

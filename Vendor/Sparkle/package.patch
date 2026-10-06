@@ -1,0 +1,91 @@
+--- a/Sparkle/SUUpdateValidator.m
++++ b/Sparkle/SUUpdateValidator.m
+@@ -15,6 +15,7 @@
+ #import "SUSignatures.h"
+ #import "SUErrors.h"
+ #import "SPUVerifierInformation.h"
++#import "BeeSavePackagePolicy.h"
+ 
+ 
+ #include "AppKitPrevention.h"
+@@ -59,6 +60,7 @@
+ 
+ - (BOOL)validateDownloadPathWithFallbackOnCodeSigning:(BOOL)fallbackOnCodeSigning error:(NSError * __autoreleasing *)error
+ {
++    fallbackOnCodeSigning = NO; // BeeSave requires Ed25519 without a signing fallback.
+     SUPublicKeys *publicKeys = _host.publicKeys;
+     SUSignatures *signatures = _signatures;
+ 
+@@ -138,6 +140,11 @@
+     }
+ 
+     NSURL *installSourceURL = [NSURL fileURLWithPath:installSource];
++    // The Ed25519 signature and the Apple signature have independent roles.
++    // Fail closed before any package/bundle installation path is selected.
++    if (!_prevalidatedSignature || _validatedDownloadUsingCodeSigning ||
++        !BeeSaveValidatePackage(installSourceURL, host.bundle.bundleURL,
++            _verifierInformation.expectedVersion, _verifierInformation.beeSaveExpectedDisplayVersion, error)) return NO;
+ 
+     if (!_prevalidatedSignature) {
+ #if SPARKLE_BUILD_PACKAGE_SUPPORT
+--- a/Sparkle/SPUVerifierInformation.h
++++ b/Sparkle/SPUVerifierInformation.h
+@@ -20,6 +20,7 @@
+ - (instancetype)initWithExpectedVersion:(NSString * _Nullable)expectedVersion expectedContentLength:(uint64_t)expectedContentLength;
+ 
+ @property (nonatomic, readonly, copy, nullable) NSString *expectedVersion;
++@property (nonatomic, copy, nullable) NSString *beeSaveExpectedDisplayVersion;
+ @property (nonatomic, readonly) uint64_t expectedContentLength;
+ 
+ @property (nonatomic, copy, nullable) NSString *actualVersion;
+--- a/Sparkle/SPUInstallerDriver.m
++++ b/Sparkle/SPUInstallerDriver.m
+@@ -251,6 +251,7 @@
+     id<SPUInstallerDriverDelegate> delegate = _delegate;
+     
+     SPUInstallationInputData *installationData = [[SPUInstallationInputData alloc] initWithRelaunchPath:pathToRelaunch hostBundlePath:_host.bundlePath updateURLBookmarkData:_updateURLBookmarkData installationType:_updateItem.installationType signatures:_updateItem.signatures decryptionPassword:decryptionPassword expectedVersion:_updateItem.versionString expectedContentLength:_updateItem.contentLength];
++    installationData.beeSaveExpectedDisplayVersion = _updateItem.displayVersionString;
+     
+     NSData *archivedData = SPUArchiveRootObjectSecurely(installationData);
+     if (archivedData == nil) {
+--- a/Autoupdate/SPUInstallationInputData.h
++++ b/Autoupdate/SPUInstallationInputData.h
+@@ -33,6 +33,7 @@
+ @property (nonatomic, readonly, nullable) SUSignatures *signatures; // nullable because although not using signatures is deprecated, it's still supported
+ @property (nonatomic, copy, readonly, nullable) NSString *decryptionPassword;
+ @property (nonatomic, copy, readonly, nullable) NSString *expectedVersion;
++@property (nonatomic, copy, nullable) NSString *beeSaveExpectedDisplayVersion;
+ @property (nonatomic, readonly) uint64_t expectedContentLength;
+ 
+ @end
+--- a/Autoupdate/SPUInstallationInputData.m
++++ b/Autoupdate/SPUInstallationInputData.m
+@@ -84,7 +84,9 @@
+     NSString *expectedVersion = [decoder decodeObjectOfClass:[NSString class] forKey:SUExpectedVersionKey];
+     uint64_t expectedContentLength = (uint64_t)[decoder decodeInt64ForKey:SUExpectedContentLength];
+     
+-    return [self initWithRelaunchPath:relaunchPath hostBundlePath:hostBundlePath updateURLBookmarkData:updateURLBookmarkData installationType:installationType signatures:signatures decryptionPassword:decryptionPassword expectedVersion:expectedVersion expectedContentLength:expectedContentLength];
++    SPUInstallationInputData *result = [self initWithRelaunchPath:relaunchPath hostBundlePath:hostBundlePath updateURLBookmarkData:updateURLBookmarkData installationType:installationType signatures:signatures decryptionPassword:decryptionPassword expectedVersion:expectedVersion expectedContentLength:expectedContentLength];
++    result.beeSaveExpectedDisplayVersion = [decoder decodeObjectOfClass:NSString.class forKey:@"BeeSaveExpectedDisplayVersion"];
++    return result;
+ }
+ 
+ - (void)encodeWithCoder:(NSCoder *)coder
+@@ -97,6 +99,7 @@
+     if (_decryptionPassword != nil) {
+         [coder encodeObject:_decryptionPassword forKey:SUDecryptionPasswordKey];
+     }
++    [coder encodeObject:self.beeSaveExpectedDisplayVersion forKey:@"BeeSaveExpectedDisplayVersion"];
+     if (_expectedVersion != nil) {
+         [coder encodeObject:_expectedVersion forKey:SUExpectedVersionKey];
+     }
+--- a/Autoupdate/AppInstaller.m
++++ b/Autoupdate/AppInstaller.m
+@@ -632,6 +632,7 @@
+             self->_decryptionPassword = installationData.decryptionPassword;
+             self->_host = [[SUHost alloc] initWithBundle:hostBundle];
+             self->_verifierInformation = [[SPUVerifierInformation alloc] initWithExpectedVersion:installationData.expectedVersion expectedContentLength:installationData.expectedContentLength];
++            self->_verifierInformation.beeSaveExpectedDisplayVersion = installationData.beeSaveExpectedDisplayVersion;
+             
+             [self extractAndInstallUpdate];
+         });

@@ -2,6 +2,29 @@ import XCTest
 @testable import BudgetCore
 
 final class BackupTests: XCTestCase {
+    func testFailedExternalReplacementPreservesVerifiedCopy() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = VaultStore(url: root.appendingPathComponent("vault.beesave"))
+        let folder = root.appendingPathComponent("external")
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path); store.close(); try? FileManager.default.removeItem(at: root) }
+        let db = Database(), key = try VaultCrypto.random(), recovery = try VaultCrypto.random()
+        try store.initialize(db: db, dataKey: key, bootstrap: Bootstrap(databaseID: db.id, password: nil, recovery: try VaultCrypto.seal(key, key: recovery, context: VaultCrypto.recoveryContext)))
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let copy = folder.appendingPathComponent("copy.mubak")
+        try store.backup(to: copy)
+        XCTAssertEqual((try FileManager.default.attributesOfItem(atPath: copy.path)[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        let original = try Data(contentsOf: copy)
+        try store.transaction { try Ledger.saveAccount(Account(name: "Изменённая тестовая база", currency: "RUB"), in: &$0) }
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: folder.path)
+        XCTAssertThrowsError(try store.backup(to: copy))
+        XCTAssertEqual(try Data(contentsOf: copy), original)
+        XCTAssertEqual(try VaultFile.read(original).decrypt(key: key), db)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
+        try store.backup(to: copy)
+        XCTAssertEqual(try VaultFile.read(Data(contentsOf: copy)).decrypt(key: key), store.db)
+        XCTAssertEqual((try FileManager.default.attributesOfItem(atPath: copy.path)[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+    }
+
     func testDailyRetentionAndFailedRestoreKeepCurrentFile() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let store = VaultStore(url: root.appendingPathComponent("vault.beesave"))

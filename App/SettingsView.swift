@@ -1,7 +1,7 @@
 import SwiftUI
 import BudgetCore
 
-private enum SettingsEditor: String, Identifiable { case access, password, rate; var id: String { rawValue } }
+private enum SettingsEditor: String, Identifiable { case password, rate; var id: String { rawValue } }
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var editor: SettingsEditor?
@@ -18,7 +18,7 @@ struct SettingsView: View {
             #if DEBUG && UI_SMOKE
             .preferredColorScheme(model.previewAppearance)
             #endif
-            .sheet(item: $editor) { item in switch item { case .access: AccessSettingsEditor(); case .password: AccessSettingsEditor(changePassword: true); case .rate: ManualRateEditor() } }
+            .sheet(item: $editor) { item in switch item { case .password: PasswordSettingsEditor(); case .rate: ManualRateEditor() } }
             .onChange(of: model.db == nil) { if model.db == nil { editor = nil } }
     }
     @ViewBuilder private func content(db: Database) -> some View {
@@ -31,14 +31,11 @@ struct SettingsView: View {
             Text("Версия \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") · Обновления доступны в меню BeeSave.").font(.caption).foregroundStyle(BeeStyle.backgroundMuted)
         case .access:
             VStack(alignment: .leading, spacing: 16) {
-                Label(model.bootstrap?.password != nil ? "Вход паролем включён" : "Вход паролем выключен", systemImage: "lock")
-                Label(model.bootstrap?.touchID == true ? "Touch ID включён" : "Touch ID выключен", systemImage: "touchid")
+                Label("Вход по паролю", systemImage: "lock")
                 Button("Сменить пароль…") { editor = .password }
-                Button("Настроить способы входа…") { editor = .access }
                 Divider(); FormField(title: "Автоблокировка") { Picker("Автоблокировка", selection: Binding(get: { model.db?.settings.lockMinutes ?? 5 }, set: { minutes in model.perform { $0.settings.lockMinutes = minutes } })) { Text("Выключена").tag(0); ForEach([1, 5, 10, 15, 30], id: \.self) { Text("Через \($0) мин").tag($0) } }.labelsHidden() }
                 Text("При блокировке Mac и сне данные скрываются. Незавершённые формы закрываются.").font(.caption).foregroundStyle(BeeStyle.muted)
             }.beeCard()
-            DisclosureGroup("Диагностика") { Text(LocalKeys.keychainEntitled() ? "Права Keychain доступны." : "Для Touch ID и входа без пароля требуется подписанная сборка с правами Keychain.").font(.caption); Text(LocalKeys.biometricAvailable() ? "Touch ID доступен." : "Touch ID недоступен на этом Mac.").font(.caption) }
         case .rates:
             VStack(alignment: .leading, spacing: 14) {
                 Text("Последняя проверка: " + (db.settings.lastRateCheck?.formatted(date: .numeric, time: .shortened) ?? "ещё не выполнялась")).font(.caption).foregroundStyle(BeeStyle.muted)
@@ -58,38 +55,59 @@ struct SettingsView: View {
                 Text("Хранятся 30 дневных и 10 служебных копий. Ручные копии не удаляются. Для переноса нужен ключ восстановления.").font(.caption).foregroundStyle(BeeStyle.muted)
                 Divider(); Button("Восстановить полную копию…") { model.sheet = SheetRoute(kind: .restore) }
             }.beeCard()
+        case .reminders:
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Финансовый календарь доступен без системных уведомлений.").font(.headline)
+                if db.financeData.reminders.systemEnabled { Button("Выключить системные уведомления") { model.perform { db in var book = db.financeData; book.reminders.systemEnabled = false; db.finances = book } } }
+                else { Button("Включить системные уведомления…") { Task { await FinancialNotifications.enable(model: model) } } }
+                Text("Системные напоминания содержат нейтральный текст. Названия счетов, суммы и условия видны после разблокировки. Планируются ближайшие 45 дней, до 60 напоминаний; окно пополняется при работе с бюджетом.").font(.caption).foregroundStyle(BeeStyle.muted)
+                if let status = model.financialNotificationStatus {
+                    Text(status.message).font(.caption)
+                    if let through = status.scheduledThrough { Text("Проверено до: " + through.formatted(date: .numeric, time: .shortened) + " · в очереди: \(status.pendingCount)").font(.caption).foregroundStyle(BeeStyle.muted) }
+                    if let error = status.error { Text(error).font(.caption).foregroundStyle(BeeStyle.negative) }
+                }
+                Button("Проверить расписание") { model.refreshFinancialForecasts() }.disabled(model.financialBusy)
+                Button("Открыть системные настройки") {
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                Button("Открыть календарь") { model.section = .financialCalendar }
+                #if DEBUG && UI_SMOKE && NOTIFICATION_QA
+                Divider()
+                Text("Проверка macOS · отдельный вымышленный бюджет").font(.caption)
+                Button("Тест: одно событие через две минуты") { model.prepareNotificationFixture(count: 1) }
+                Button("Тест: плановый платёж через две минуты") { model.prepareNotificationFixture(count: 1, scheduled: true) }
+                Button("Тест: очередь из 65 событий") { model.prepareNotificationFixture(count: 65) }
+                Button("Тест: проверить очередь и нейтральный текст") { Task { await model.inspectNotificationFixture() } }
+                #endif
+            }.beeCard()
         case .transfer:
             VStack(alignment: .leading, spacing: 16) { Text("CSV для таблиц и обмена").font(.headline); Button("Импортировать CSV…") { model.sheet = SheetRoute(kind: .importCSV) }; Button("Экспортировать операции…") { model.exportCSV() }; Text("CSV хранится открытым текстом. Полная зашифрованная копия переносит все настройки и историю.").font(.caption).foregroundStyle(BeeStyle.muted) }.beeCard()
         }
     }
 }
 
-struct AccessSettingsEditor: View {
+struct PasswordSettingsEditor: View {
     @EnvironmentObject var model: AppModel
-    var changePassword = false
     @FocusState private var passwordFocused: Bool
     @State private var current = ""
     @State private var recoveryAuth = false
-    @State private var passwordOn = true
-    @State private var touchID = false
     @State private var newPassword = ""
     @State private var repeated = ""
-    @State private var openSessionConfirmed = false
     @State private var original: [String] = []
     @State private var loaded = false
-    private var value: [String] { [current, String(recoveryAuth), String(passwordOn), String(touchID), newPassword, repeated, String(openSessionConfirmed)] }
+    private var value: [String] { [current, String(recoveryAuth), newPassword, repeated] }
     var body: some View {
-        EditorFrame(title: changePassword ? "Сменить пароль" : "Способы входа", canSave: (passwordOn || touchID || openSessionConfirmed) && newPassword == repeated, isDirty: loaded && value != original, height: 600, saveAsync: {
-            guard newPassword == repeated else { throw BudgetError.invalid("Пароли не совпали.") }; try await model.changeAccess(current: current, useRecovery: recoveryAuth, passwordEnabled: passwordOn, newPassword: newPassword, touchID: touchID)
+        EditorFrame(title: "Сменить пароль", canSave: !current.isEmpty && newPassword.count >= 12 && newPassword == repeated, isDirty: loaded && value != original, height: 550, saveAsync: {
+            guard newPassword == repeated else { throw BudgetError.invalid("Пароли не совпали.") }; try await model.changePassword(current: current, useRecovery: recoveryAuth, newPassword: newPassword)
         }, save: {}) {
-            Toggle("Вход паролем приложения", isOn: $passwordOn).toggleStyle(.checkbox)
-            Toggle("Touch ID", isOn: $touchID).toggleStyle(.checkbox).disabled(!LocalKeys.biometricAvailable())
-            if !passwordOn && !touchID { Text("Бюджет будет доступен в вашей разблокированной сессии macOS.").font(.caption).foregroundStyle(BeeStyle.warning); Toggle("Подтверждаю вход без дополнительной проверки", isOn: $openSessionConfirmed).toggleStyle(.checkbox).disabled(!LocalKeys.keychainEntitled()) }
-            if passwordOn { FormField(title: "Новый пароль", hint: "Не менее 12 символов. Оставьте пустым, чтобы сохранить текущий.") { SecureField("Новый пароль", text: $newPassword).textFieldStyle(.roundedBorder).focused($passwordFocused) }; FormField(title: "Повторите новый пароль") { SecureField("Повтор", text: $repeated).textFieldStyle(.roundedBorder) } }
+            FormField(title: "Новый пароль", hint: "Не менее 12 символов") { SecureField("Новый пароль", text: $newPassword).textFieldStyle(.roundedBorder).focused($passwordFocused) }
+            FormField(title: "Повторите новый пароль") { SecureField("Повтор", text: $repeated).textFieldStyle(.roundedBorder) }
             Divider(); Text("Подтвердите изменение").font(.headline)
             Toggle("Использовать ключ восстановления", isOn: $recoveryAuth).toggleStyle(.checkbox)
-            FormField(title: recoveryAuth ? "Ключ восстановления" : "Текущий пароль приложения", hint: recoveryAuth ? nil : "При включённом Touch ID можно оставить пустым и подтвердить биометрией.") { SecureField("Подтверждение", text: $current).textFieldStyle(.roundedBorder) }
-        }.onAppear { guard !loaded else { return }; passwordOn = changePassword || model.bootstrap?.password != nil; touchID = model.bootstrap?.touchID ?? false; original = value; loaded = true; passwordFocused = changePassword }.onDisappear { current = ""; newPassword = ""; repeated = "" }
+            FormField(title: recoveryAuth ? "Ключ восстановления" : "Текущий пароль приложения") { SecureField("Подтверждение", text: $current).textFieldStyle(.roundedBorder) }
+        }.onAppear { guard !loaded else { return }; original = value; loaded = true; passwordFocused = true }.onDisappear { current = ""; newPassword = ""; repeated = "" }
     }
 }
 

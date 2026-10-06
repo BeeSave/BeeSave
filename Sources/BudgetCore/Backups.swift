@@ -17,7 +17,7 @@ public enum Backups {
     }
     public static func beforeMassChange(store: VaultStore, folder: URL) throws -> URL? {
         guard let db = store.db else { throw BudgetError.locked }
-        guard !db.accounts.isEmpty || !db.operations.isEmpty || !db.budgets.isEmpty || !db.reports.isEmpty || !db.projects.isEmpty || db.categories.contains(where: { !$0.system }) || !db.imports.isEmpty else { return nil }
+        guard !db.accounts.isEmpty || !db.operations.isEmpty || !db.budgets.isEmpty || !db.reports.isEmpty || !db.projects.isEmpty || db.categories.contains(where: { !$0.system }) || !db.imports.isEmpty || !(db.financeData.scheduledPayments ?? []).isEmpty || !db.financeData.banks.isEmpty || !db.financeData.calendars.isEmpty else { return nil }
         return try write(store: store, folder: folder, kind: "service")
     }
 }

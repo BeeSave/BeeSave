@@ -4,7 +4,6 @@ import Darwin
 public struct Bootstrap: Codable, Equatable, Sendable {
     public var version = 1; public var databaseID: UUID; public var password: KeyEnvelope?; public var recovery: Data; public var touchID = false; public var localKeyID = UUID()
     public init(databaseID: UUID, password: KeyEnvelope?, recovery: Data, touchID: Bool = false) { self.databaseID = databaseID; self.password = password; self.recovery = recovery; self.touchID = touchID }
-    public var requiresAuthentication: Bool { password != nil || touchID }
 }
 public struct VaultFile: Sendable {
     public var bootstrap: Bootstrap; public var payload: Data
@@ -59,10 +58,45 @@ public final class VaultStore {
         try acquire(); guard !exists else { throw BudgetError.conflict("База уже существует. Используйте вход или восстановление.") }; try Ledger.validate(db); try persist(db, key: dataKey, bootstrap: b); self.db = db; key = dataKey; bootstrap = b
     }
     public func unlock(key dataKey: Data) throws {
-        try acquire(); let file = try VaultFile.read(Data(contentsOf: url)); let database = try file.decrypt(key: dataKey); db = database; key = dataKey; bootstrap = file.bootstrap
+        try acquire(); let file = try VaultFile.read(Data(contentsOf: url)); let original = try file.decrypt(key: dataKey)
+        let database = try prepareMigration(original, file: file, key: dataKey)
+        if original.version != database.version { try persist(database, key: dataKey, bootstrap: file.bootstrap) }
+        db = database; key = dataKey; bootstrap = file.bootstrap
     }
-    public func unlock(password: String) throws { let b = try inspect(); guard let env = b.password else { throw BudgetError.invalid("Вход паролем отключён.") }; try unlock(key: VaultCrypto.unwrapPassword(env, password: password)) }
+    private func prepareMigration(_ original: Database, file: VaultFile, key: Data) throws -> Database {
+        guard original.version < 3 else { return original }
+        let folder = url.deletingLastPathComponent().appendingPathComponent("Backups.noindex", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let destination = folder.appendingPathComponent("schema-" + String(original.version) + "-" + UUID().uuidString + ".mubak")
+        let backup = try file.portable().encoded()
+        try CiphertextFile.write(backup, to: destination)
+        let checked = try VaultFile.read(Data(contentsOf: destination)).decrypt(key: key)
+        guard checked == original else { throw BudgetError.storage("Исходная копия перед обновлением схемы не прошла проверку; бюджет сохранён без изменений.") }
+        return try FinancialLedger.migrate(original)
+    }
+    public func unlock(password: String) throws { let b = try inspect(); guard let env = b.password else { throw BudgetError.invalid("Задайте пароль с помощью ключа восстановления.") }; try unlock(key: VaultCrypto.unwrapPassword(env, password: password)) }
     public func unlock(recovery: String) throws { let file = try VaultFile.read(Data(contentsOf: url)); try unlock(key: file.recoveryUnlock(recovery)) }
+    /// Recovery is an explicit password reset. Publish an unlocked session only
+    /// after the new envelope has been atomically persisted and verified.
+    public func resetPassword(recovery: String, newPassword: String) throws {
+        try acquire()
+        let file = try VaultFile.read(Data(contentsOf: url))
+        let recoveredKey = try file.recoveryUnlock(recovery)
+        let original = try file.decrypt(key: recoveredKey)
+        let database = try prepareMigration(original, file: file, key: recoveredKey)
+        var next = file.bootstrap
+        next.password = try VaultCrypto.wrapPassword(recoveredKey, password: newPassword)
+        next.touchID = false
+        try persist(database, key: recoveredKey, bootstrap: next)
+        db = database; key = recoveredKey; bootstrap = next
+    }
+    public func changePassword(current: String, useRecovery: Bool = false, newPassword: String) throws {
+        if useRecovery { try verifyRecovery(current) } else { try verifyPassword(current) }
+        guard var next = bootstrap else { throw BudgetError.locked }
+        next.password = try withKey { try VaultCrypto.wrapPassword($0, password: newPassword) }
+        next.touchID = false
+        try changeBootstrap(next)
+    }
     public func transaction(_ change: (inout Database) throws -> Void) throws {
         guard var candidate = db, let key, let b = bootstrap else { throw BudgetError.locked }
         let (revision, overflow) = (candidate.revision ?? 0).addingReportingOverflow(1)
@@ -93,7 +127,8 @@ public final class VaultStore {
     public func restore(database: Database, dataKey: Data, bootstrap: Bootstrap, safetyCopy: URL?) throws {
         try acquire(); try Ledger.validate(database)
         if exists { guard let safetyCopy else { throw BudgetError.invalid("Перед заменой требуется полная копия текущих данных.") }; try backup(to: safetyCopy) }
-        try persist(database, key: dataKey, bootstrap: bootstrap); db = database; key = dataKey; self.bootstrap = bootstrap
+        let migrated = try FinancialLedger.migrate(database)
+        try persist(migrated, key: dataKey, bootstrap: bootstrap); db = migrated; key = dataKey; self.bootstrap = bootstrap
     }
     public func close() {
         db = nil; if var data = key { data.resetBytes(in: 0..<data.count) }; key = nil
@@ -105,9 +140,21 @@ public final class VaultStore {
 /// precede rename, so a reported failure leaves the previous database intact.
 enum CiphertextFile {
     static func write(_ bytes: Data, to destination: URL) throws {
+        let scoped = destination.startAccessingSecurityScopedResource()
+        defer { if scoped { destination.stopAccessingSecurityScopedResource() } }
         let folder = destination.deletingLastPathComponent()
-        let temporary = folder.appendingPathComponent(".beesave-" + UUID().uuidString + ".encrypted")
-        let fd = Darwin.open(temporary.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        let name = ".beesave-" + UUID().uuidString + ".encrypted"
+        var temporary = folder.appendingPathComponent(name)
+        var replacementFolder: URL?
+        defer { if let replacementFolder { try? FileManager.default.removeItem(at: replacementFolder) } }
+        var fd = Darwin.open(temporary.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        if fd < 0 && (errno == EACCES || errno == EPERM) {
+            // Save panels grant the selected file, not arbitrary sibling files.
+            // Foundation supplies an accessible staging directory on the same volume.
+            let staging = try FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: destination, create: true)
+            replacementFolder = staging; temporary = staging.appendingPathComponent(name)
+            fd = Darwin.open(temporary.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        }
         guard fd >= 0 else { throw BudgetError.storage("Не удалось создать защищённый временный файл.") }
         defer { Darwin.close(fd); _ = Darwin.unlink(temporary.path) }
         try bytes.withUnsafeBytes { buffer in
@@ -121,7 +168,15 @@ enum CiphertextFile {
             }
         }
         guard fchmod(fd, 0o600) == 0, fsync(fd) == 0 else { throw BudgetError.storage("Не удалось завершить запись защищённого файла.") }
-        guard Darwin.rename(temporary.path, destination.path) == 0 else { throw BudgetError.storage("Не удалось атомарно заменить файл.") }
+        if replacementFolder != nil {
+            var coordinationError: NSError?, replacementError: Error?
+            NSFileCoordinator().coordinate(writingItemAt: destination, options: .forReplacing, error: &coordinationError) { target in
+                if Darwin.rename(temporary.path, target.path) != 0 { replacementError = BudgetError.storage("Не удалось атомарно заменить файл.") }
+            }
+            if let coordinationError { throw coordinationError }; if let replacementError { throw replacementError }
+        } else {
+            guard Darwin.rename(temporary.path, destination.path) == 0 else { throw BudgetError.storage("Не удалось атомарно заменить файл.") }
+        }
         let directory = Darwin.open(folder.path, O_RDONLY)
         if directory >= 0 { _ = fsync(directory); Darwin.close(directory) }
     }

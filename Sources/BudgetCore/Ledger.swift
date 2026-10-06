@@ -8,6 +8,7 @@ public enum Ledger {
         guard a.openedOn <= .today else { throw BudgetError.invalid("Дата открытия не может быть в будущем.") }
         guard !db.accounts.contains(where: { $0.id != a.id && normalized($0.name) == normalized(a.name) }) else { throw BudgetError.conflict("Счёт с таким названием уже существует.") }
         let records = db.operations.filter { $0.accountID == a.id || $0.toAccountID == a.id }
+        if let old = db.accounts.first(where: { $0.id == a.id }), old.kind != a.kind, !records.isEmpty { throw BudgetError.conflict("Настройте финансовый договор отдельной командой; тип счёта с историей не меняется напрямую.") }
         if let old = db.accounts.first(where: { $0.id == a.id }), old.currency != a.currency, !records.isEmpty { throw BudgetError.conflict("Валюта счёта с историей не меняется. Создайте другой счёт.") }
         guard records.allSatisfy({ $0.date >= a.openedOn }) else { throw BudgetError.invalid("Дата открытия позже имеющихся операций.") }
         a.modifiedAt = Date()
@@ -15,6 +16,8 @@ public enum Ledger {
         else { db.accounts.append(a); if let opening, opening != 0 { db.operations.append(Operation(kind: .opening, date: a.openedOn, accountID: a.id, amount: opening)) } }
     }
     public static func deleteAccount(_ id: UUID, in db: inout Database) throws {
+        guard !(db.financeData.scheduledPayments ?? []).contains(where: { $0.accountID == id }) else { throw BudgetError.conflict("Счёт используется в плановом платеже. Архивируйте его.") }
+        guard db.contract(for: id) == nil, db.financeData.contracts.allSatisfy({ contract in contract.paymentAccountID != id && contract.terms.allSatisfy { $0.deposit.payoutAccountID != id && $0.loan.escrowAccountID != id } }) else { throw BudgetError.conflict("Счёт используется в финансовом договоре. Архивируйте его.") }
         guard !db.operations.contains(where: { $0.accountID == id || $0.toAccountID == id }), !db.reports.contains(where: { $0.filters.accounts.contains(id) }), !db.dashboard.contains(where: { $0.ownFilters?.accounts.contains(id) == true }), !db.settings.dashboardFilters.accounts.contains(id) else { throw BudgetError.conflict("Счёт используется в истории или фильтрах. Архивируйте его.") }
         db.accounts.removeAll { $0.id == id }
     }
@@ -34,7 +37,7 @@ public enum Ledger {
         } else { db.categories.append(c) }
     }
     public static func categoryUsed(_ id: UUID, db: Database) -> Bool {
-        db.operations.contains { $0.categoryID == id } || db.budgets.contains { $0.lines.contains { $0.categoryID == id } } || db.reports.contains { $0.filters.categories.contains(id) } || db.dashboard.contains { $0.ownFilters?.categories.contains(id) == true } || db.settings.dashboardFilters.categories.contains(id)
+        db.operations.contains { $0.categoryID == id } || (db.financeData.scheduledPayments ?? []).contains { $0.categoryID == id } || db.budgets.contains { $0.lines.contains { $0.categoryID == id } } || db.reports.contains { $0.filters.categories.contains(id) } || db.dashboard.contains { $0.ownFilters?.categories.contains(id) == true } || db.settings.dashboardFilters.categories.contains(id)
     }
     public static func deleteCategory(_ id: UUID, in db: inout Database) throws {
         guard let c = db.categories.first(where: { $0.id == id }), !c.system, !categoryUsed(id, db: db), !db.categories.contains(where: { $0.parentID == id }) else { throw BudgetError.conflict("Категория используется или является системной. Доступно архивирование использованных категорий.") }
@@ -46,14 +49,23 @@ public enum Ledger {
         if let i = db.projects.firstIndex(where: { $0.id == p.id }) { db.projects[i] = p } else { db.projects.append(p) }
     }
     public static func deleteProject(_ id: UUID, in db: inout Database) throws {
+        guard !(db.financeData.scheduledPayments ?? []).contains(where: { $0.projectID == id }) else { throw BudgetError.conflict("Проект используется в плановом платеже. Архивируйте его.") }
         guard !db.operations.contains(where: { $0.projectID == id }), !db.budgets.contains(where: { $0.projectID == id }), !db.reports.contains(where: { $0.filters.projectID == id }), !db.dashboard.contains(where: { $0.ownFilters?.projectID == id }), db.settings.dashboardFilters.projectID != id else { throw BudgetError.conflict("Проект используется. Архивируйте его.") }
         db.projects.removeAll { $0.id == id }
     }
     public static func saveOperation(_ operation: Operation, currencyConfirmed: Bool = false, in db: inout Database) throws {
+        var candidate = db
+        let old = db.operations.first { $0.id == operation.id }
+        try saveOperationUnchecked(operation, currencyConfirmed: currencyConfirmed, in: &candidate)
+        if let old { try ScheduledPayments.operationChanged(from: old, to: operation, in: &candidate) }
+        db = candidate
+    }
+    private static func saveOperationUnchecked(_ operation: Operation, currencyConfirmed: Bool, in db: inout Database) throws {
         var o = operation; let source = try db.account(o.accountID)
         guard !source.archived else { throw BudgetError.invalid("Для изменения финансовых полей верните счёт из архива.") }
         if let id = o.toAccountID, try db.account(id).archived { throw BudgetError.invalid("Счёт получателя архивирован.") }
         if let old = db.operations.first(where: { $0.id == o.id }) {
+            guard old.financial?.groupID == nil else { throw BudgetError.conflict("Изменение относится ко всей финансовой группе. Удалите её и подтвердите исправленный платёж.") }
             guard !(try db.account(old.accountID).archived), old.toAccountID.map({ id in db.accounts.first { $0.id == id }?.archived ?? true }) != true else { throw BudgetError.invalid("Верните затронутые счета из архива.") }
             if try db.account(old.accountID).currency != source.currency, !currencyConfirmed { throw BudgetError.invalid("Подтвердите сумму в новой валюте; обновите курсовые снимки.") }
             if old.kind == .adjustment || old.kind == .opening { throw BudgetError.invalid("Корректировку исправляют удалением и новой сверкой. Начальный остаток задаётся при создании счёта.") }
@@ -66,6 +78,8 @@ public enum Ledger {
             o.transferRate = try Money.ratio(from: o.amount, currency: source.currency, to: received, toCurrency: db.account(to).currency)
         }
         o.modifiedAt = Date(); try validateOperation(o, accounts: Dictionary(uniqueKeysWithValues: db.accounts.map { ($0.id, $0) }), categories: Dictionary(uniqueKeysWithValues: db.categories.map { ($0.id, $0) }), projects: Set(db.projects.map(\.id)))
+        let warnings = try FinancialLedger.depositWarnings(o, db: db)
+        if !warnings.isEmpty && o.financial?.contractViolationConfirmed != true { throw BudgetError.invalid(warnings.joined(separator: " ") + " Подтвердите фактическую операцию и укажите последствия.") }
         if let i = db.operations.firstIndex(where: { $0.id == o.id }) { db.operations[i] = o } else { db.operations.append(o) }
         _ = try db.balance(o.accountID); if let to = o.toAccountID { _ = try db.balance(to) }
     }
@@ -76,8 +90,11 @@ public enum Ledger {
     }
     public static func deleteOperation(_ id: UUID, in db: inout Database) throws {
         guard let o = db.operations.first(where: { $0.id == id }) else { return }
+        if let groupID = o.financial?.groupID { try FinancialLedger.deleteGroup(groupID, in: &db); return }
         guard !(try db.account(o.accountID).archived), o.toAccountID.flatMap({ to in db.accounts.first { $0.id == to } })?.archived != true else { throw BudgetError.invalid("Для удаления верните счета из архива.") }
         db.operations.removeAll { $0.id == id }
+        ScheduledPayments.detachOperations([id], in: &db)
+        db.finances?.fulfillments.removeAll { $0.operationIDs.contains(id) }
     }
     public static func validateOperation(_ o: Operation, accounts: [UUID: Account], categories: [UUID: Category], projects: Set<UUID>, today: Day = .today) throws {
         guard let a = accounts[o.accountID], o.date >= a.openedOn, o.date <= today else { throw BudgetError.invalid("Операция раньше открытия счёта или в будущем.") }
@@ -130,7 +147,8 @@ public enum Ledger {
     }
     public static func validate(_ db: Database) throws {
         let today = Day.today
-        guard db.version <= 1 else { throw BudgetError.newerVersion }; guard db.version == 1 else { throw BudgetError.corrupt }
+        guard db.version <= 3 else { throw BudgetError.newerVersion }; guard (1...3).contains(db.version) else { throw BudgetError.corrupt }
+        if db.version == 1 { guard db.finances == nil, db.accounts.allSatisfy({ $0.kind == .ordinary }), db.operations.allSatisfy({ $0.financial == nil }) else { throw BudgetError.corrupt } }
         func unique<T>(_ values: [T], id: (T) -> UUID) throws { guard Set(values.map(id)).count == values.count else { throw BudgetError.corrupt } }
         try unique(db.accounts, id: \.id); try unique(db.categories, id: \.id); try unique(db.projects, id: \.id); try unique(db.operations, id: \.id); try unique(db.budgets, id: \.id); try unique(db.reports, id: \.id)
         var names = Set<String>()
@@ -156,5 +174,7 @@ public enum Ledger {
         _ = try Currency.get(db.settings.baseCurrency); _ = try Currency.get(db.settings.reportCurrency)
         for block in db.dashboard { if let id = block.reportID { guard db.reports.contains(where: { $0.id == id }) else { throw BudgetError.corrupt } }; if let f = block.ownFilters { try Reports.validateFilters(f, db: db) } }
         try Reports.validateFilters(db.settings.dashboardFilters, db: db)
+        try FinancialLedger.validate(db)
+        try ScheduledPayments.validate(db)
     }
 }

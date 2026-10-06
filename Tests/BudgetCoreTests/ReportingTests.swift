@@ -33,6 +33,8 @@ final class ReportingTests: XCTestCase {
     func testAC16XMLAndInvalidNetwork() throws {
         let data = Data("<ValCurs Date=\"03.10.2026\"><Valute><CharCode>JPY</CharCode><Nominal>100</Nominal><Value>120,0000</Value></Valute><Valute><CharCode>USD</CharCode><Nominal>1</Nominal><Value>90,0000</Value></Valute></ValCurs>".utf8)
         let rates = try RateProvider.parseCBR(data, requested: try Day("2026-10-03")); XCTAssertEqual(rates.first { $0.base == "JPY" }?.rate, "1.2"); XCTAssertEqual(try Reports.rate(from: "USD", to: "JPY", rates: rates, on: try Day("2026-10-03")), "75")
+        XCTAssertThrowsError(try RateProvider.parseCBR(data, requested: try Day("2026-10-02")))
+        XCTAssertEqual(RateProvider.cbrURL(on: try Day("2026-10-03")).query, "date_req=03/10/2026")
         XCTAssertThrowsError(try RateProvider.parseCBR(Data("<!DOCTYPE x [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><x>&x;</x>".utf8)))
         XCTAssertThrowsError(try RateProvider.parseFrankfurter(Data("{\"date\":\"2099-01-01\",\"base\":\"USD\",\"quote\":\"RUB\",\"rate\":90}".utf8), base: "USD", quote: "RUB"))
     }
