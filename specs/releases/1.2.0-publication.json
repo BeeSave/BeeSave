@@ -9,9 +9,9 @@
   "tag": "v1.2.0",
   "sourceCommit": "49c3e6e818c99f7078da0bade6e1227b8385b7ae",
   "sourceBranch": "codex/update-install-1-2-0",
-  "prerelease": true,
+  "prerelease": false,
   "draft": false,
-  "latestStableTag": "v1.1.0",
+  "latestStableTag": "v1.2.0",
   "endToEndInstallationVerified": false,
   "systemAcceptanceComplete": false,
   "assets": [
@@ -62,5 +62,18 @@
       "identical DMG/ZIP app bytes, symlinks and executable permissions"
     ],
     "logSHA256": "653e42d06e3b4a1e051ab920e5e96e5ce597813a9a2e7cc7ab14c1a77ecf0a1e"
+  },
+  "stabilityPromotion": {
+    "verifiedUTC": "2026-10-06T13:09:00.020323+00:00",
+    "userAcceptanceDate": "2026-10-06",
+    "userStatement": "проверил, пока все работает корректно. можно считать эту версию стабильной.",
+    "releasePrerelease": false,
+    "latestTag": "v1.2.0",
+    "sameReleaseID": true,
+    "sameTagCommit": true,
+    "assetHashesUnchanged": true,
+    "latestManifestVersion": "1.2.0",
+    "latestManifestBuild": 6,
+    "detailedUserTestMatrixProvided": false
   }
 }

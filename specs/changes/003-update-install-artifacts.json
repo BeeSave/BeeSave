@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "pre-release-system-acceptance-pending",
+  "status": "stable-user-accepted",
   "generatedUTC": "2026-10-05T22:27:48.489876+00:00",
   "baseCommit": "9dadf4760238417a257186b73ecce1511be41a6d",
   "workingDiff": true,
