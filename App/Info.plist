@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>SUPublicEDKey</key><string>kdXTS59u/tc1AC8cfcs3aJGrkauyztg+sjWd/oTC9mg=</string>
+<key>SURequireSignedFeed</key><true/>
+<key>SUSignedFeedFailureExpirationInterval</key><real>0</real>
+<key>SUVerifyUpdateBeforeExtraction</key><true/>
+<key>SUEnableAutomaticChecks</key><false/>
+<key>SUAutomaticallyUpdate</key><false/>
+<key>SUEnableSystemProfiling</key><false/>
+<key>SUShowReleaseNotes</key><false/>
+<key>SUPromptUserOnFirstLaunch</key><false/>
+<key>SUEnableInstallerLauncherService</key><true/>
+<key>SUEnableDownloaderService</key><false/>
+</dict></plist>
