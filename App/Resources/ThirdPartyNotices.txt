@@ -1,3 +1,9 @@
+BeeSave includes Sparkle 2.10.0, commit eef1a539a373c1f1a320624b1130fc5de7b2e100.
+https://github.com/sparkle-project/Sparkle
+BeeSave's source patches are documented in Vendor/Sparkle/README.md.
+The complete upstream license and notices are included in
+Contents/Frameworks/Sparkle.framework/Versions/B/Resources/BeeSaveSparkleLICENSE.
+
 BeeSave includes the official Argon2 reference implementation, tag 20190702.
 https://github.com/P-H-C/phc-winner-argon2
 

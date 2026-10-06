@@ -5,27 +5,26 @@ import BudgetPresentation
 @main struct BeeSaveApp: App {
     @NSApplicationDelegateAdaptor(ApplicationDelegate.self) private var applicationDelegate
     @StateObject private var model = AppModel()
-    @StateObject private var updater = AppUpdateManager(
-        version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
-        build: Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0,
-        macOS: ProcessInfo.processInfo.operatingSystemVersionStringForUpdates,
-        architecture: "arm64")
+    @StateObject private var updater = InstallUpdateManager()
     var body: some Scene {
-        WindowGroup("BeeSave") { RootView().environmentObject(model).frame(minWidth: 1000, minHeight: 700) }
+        WindowGroup("BeeSave") {
+            RootView().environmentObject(model).frame(minWidth: 1000, minHeight: 700)
+                .onAppear { updater.attach(model); applicationDelegate.updater = updater; applicationDelegate.model = model }
+        }
             .defaultSize(width: 1260, height: 840)
             .commands {
                 AppUpdateCommands(updater: updater)
                 CommandGroup(after: .newItem) {
-                    Button("Новый расход") { model.newOperation(.expense) }.keyboardShortcut("n").disabled(model.db == nil)
-                    Button("Новый доход") { model.newOperation(.income) }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(model.db == nil)
-                    Divider(); Button("Импорт CSV…") { model.sheet = SheetRoute(kind: .importCSV) }.disabled(model.db == nil)
-                    Button("Экспорт всех операций…") { model.exportCSV() }.disabled(model.db == nil)
-                    Divider(); Button("Сохранить полную копию…") { model.manualBackup() }.disabled(model.db == nil)
-                    Button("Восстановить полную копию…") { model.sheet = SheetRoute(kind: .restore) }
+                    Button("Новый расход") { model.newOperation(.expense) }.keyboardShortcut("n").disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending)
+                    Button("Новый доход") { model.newOperation(.income) }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending)
+                    Divider(); Button("Импорт CSV…") { model.sheet = SheetRoute(kind: .importCSV) }.disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending)
+                    Button("Экспорт всех операций…") { model.exportCSV() }.disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending)
+                    Divider(); Button("Сохранить полную копию…") { model.manualBackup() }.disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending)
+                    Button("Восстановить полную копию…") { model.sheet = SheetRoute(kind: .restore) }.disabled(model.updateFrozen || model.updateVerificationPending)
                 }
                 CommandGroup(after: .appSettings) { Button("Заблокировать") { model.lock() }.keyboardShortcut("l", modifiers: [.command, .shift]).disabled(model.db == nil) }
             }
-        Settings { SettingsView().environmentObject(model).frame(width: 700, height: 680) }
+        Settings { SettingsView().environmentObject(model).frame(width: 700, height: 680).disabled(model.updateFrozen) }
         Window("Обновление BeeSave", id: "app-update") {
             AppUpdateView(updater: updater)
         }.windowResizability(.contentSize)
@@ -36,6 +35,7 @@ struct RootView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         Group { if model.db != nil { HomeView() } else { AccessView() } }.beeWindow()
+        .disabled(model.updateFrozen)
         #if DEBUG && UI_SMOKE
         .preferredColorScheme(model.previewAppearance)
         #endif
@@ -60,11 +60,5 @@ struct RootView: View {
             #endif
         }
         .alert("Не удалось выполнить действие", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) { Button("Понятно") { model.error = nil } } message: { Text(model.error ?? "") }
-    }
-}
-private extension ProcessInfo {
-    var operatingSystemVersionStringForUpdates: String {
-        let version = operatingSystemVersion
-        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
     }
 }

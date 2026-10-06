@@ -4,7 +4,6 @@ import Darwin
 public struct Bootstrap: Codable, Equatable, Sendable {
     public var version = 1; public var databaseID: UUID; public var password: KeyEnvelope?; public var recovery: Data; public var touchID = false; public var localKeyID = UUID()
     public init(databaseID: UUID, password: KeyEnvelope?, recovery: Data, touchID: Bool = false) { self.databaseID = databaseID; self.password = password; self.recovery = recovery; self.touchID = touchID }
-    public var requiresAuthentication: Bool { password != nil || touchID }
 }
 public struct VaultFile: Sendable {
     public var bootstrap: Bootstrap; public var payload: Data
@@ -61,8 +60,28 @@ public final class VaultStore {
     public func unlock(key dataKey: Data) throws {
         try acquire(); let file = try VaultFile.read(Data(contentsOf: url)); let database = try file.decrypt(key: dataKey); db = database; key = dataKey; bootstrap = file.bootstrap
     }
-    public func unlock(password: String) throws { let b = try inspect(); guard let env = b.password else { throw BudgetError.invalid("Вход паролем отключён.") }; try unlock(key: VaultCrypto.unwrapPassword(env, password: password)) }
+    public func unlock(password: String) throws { let b = try inspect(); guard let env = b.password else { throw BudgetError.invalid("Задайте пароль с помощью ключа восстановления.") }; try unlock(key: VaultCrypto.unwrapPassword(env, password: password)) }
     public func unlock(recovery: String) throws { let file = try VaultFile.read(Data(contentsOf: url)); try unlock(key: file.recoveryUnlock(recovery)) }
+    /// Recovery is an explicit password reset. Publish an unlocked session only
+    /// after the new envelope has been atomically persisted and verified.
+    public func resetPassword(recovery: String, newPassword: String) throws {
+        try acquire()
+        let file = try VaultFile.read(Data(contentsOf: url))
+        let recoveredKey = try file.recoveryUnlock(recovery)
+        let database = try file.decrypt(key: recoveredKey)
+        var next = file.bootstrap
+        next.password = try VaultCrypto.wrapPassword(recoveredKey, password: newPassword)
+        next.touchID = false
+        try persist(database, key: recoveredKey, bootstrap: next)
+        db = database; key = recoveredKey; bootstrap = next
+    }
+    public func changePassword(current: String, useRecovery: Bool = false, newPassword: String) throws {
+        if useRecovery { try verifyRecovery(current) } else { try verifyPassword(current) }
+        guard var next = bootstrap else { throw BudgetError.locked }
+        next.password = try withKey { try VaultCrypto.wrapPassword($0, password: newPassword) }
+        next.touchID = false
+        try changeBootstrap(next)
+    }
     public func transaction(_ change: (inout Database) throws -> Void) throws {
         guard var candidate = db, let key, let b = bootstrap else { throw BudgetError.locked }
         let (revision, overflow) = (candidate.revision ?? 0).addingReportingOverflow(1)

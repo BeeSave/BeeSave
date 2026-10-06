@@ -7,4 +7,6 @@ xcuserdata/
 Dist/*.zip
 Dist/*.sha256
 Dist/*.json
+Dist/*.dmg
+Dist/*.xml
 Verification/*.log

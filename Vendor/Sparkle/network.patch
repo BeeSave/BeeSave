@@ -1,0 +1,354 @@
+--- a/Downloader/SPUDownloader.m
++++ b/Downloader/SPUDownloader.m
+@@ -12,6 +12,7 @@
+ #import "SPUDownloadData.h"
+ #import "SPUDownloadDataPrivate.h"
+ #import "SUErrors.h"
++#import "BeeSaveDownloadPolicy.h"
+ 
+ 
+ #include "AppKitPrevention.h"
+@@ -24,7 +25,7 @@
+ 
+ static NSString *SUDownloadingReason = @"Downloading update related file";
+ 
+-@interface SPUDownloader () <NSURLSessionDownloadDelegate>
++@interface SPUDownloader () <NSURLSessionDownloadDelegate, NSURLSessionDataDelegate>
+ @end
+ 
+ @implementation SPUDownloader
+@@ -41,6 +42,10 @@
+     
+     BOOL _disabledAutomaticTermination;
+     BOOL _receivedExpectedBytes;
++    BOOL _finished;
++    NSUInteger _redirectCount;
++    NSMutableData *_temporaryData;
++    NSString *_ownedDownloadDirectory;
+ }
+ 
+ - (instancetype)initWithDelegate:(id <SPUDownloaderDelegate>)delegate
+@@ -52,53 +57,100 @@
+     return self;
+ }
+ 
++- (void)failDownload:(NSError *)error SPU_OBJC_DIRECT
++{
++    if (_finished || _delegate == nil) return;
++    _finished = YES;
++    [_delegate downloaderDidFailWithError:error];
++    if (_ownedDownloadDirectory != nil) {
++        [[NSFileManager defaultManager] removeItemAtPath:_ownedDownloadDirectory error:NULL];
++        _ownedDownloadDirectory = nil;
++    }
++    [self _cleanup];
++}
++
++- (NSError *)downloadPolicyError:(NSString *)message SPU_OBJC_DIRECT
++{
++    return [NSError errorWithDomain:SUSparkleErrorDomain code:SUDownloadError
++                          userInfo:@{NSLocalizedDescriptionKey: message}];
++}
++
++- (BOOL)validateResponse:(NSURLResponse *)response SPU_OBJC_DIRECT
++{
++    uint64_t limit = (_mode == SPUDownloadModeTemporary) ? BeeSaveFeedLimit : BeeSaveArchiveLimit;
++    if (![response isKindOfClass:NSHTTPURLResponse.class] ||
++        ((NSHTTPURLResponse *)response).statusCode != 200 ||
++        !BeeSaveDownloadURL(_sessionTask.originalRequest.URL, response.URL) ||
++        (response.expectedContentLength > 0 && (uint64_t)response.expectedContentLength > limit)) {
++        [self failDownload:[self downloadPolicyError:@"The update response violates the BeeSave download policy."]];
++        return NO;
++    }
++    return YES;
++}
++
+ - (void)startDownloadWithRequest:(NSURLRequest *)request SPU_OBJC_DIRECT
+ {
+-    if (request == nil) {
+-        NSString *message = @"The download request must not be nil";
+-        NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUDownloadError userInfo:@{ NSLocalizedDescriptionKey: message }];
+-        [_delegate downloaderDidFailWithError:error];
+-        
+-        return;
+-    }
+-    
+-    // Prevent any unwanted URL schemes (e.g. file://)
+-    NSString *scheme = request.URL.scheme;
+-    if (scheme == nil) {
+-        NSString *message = @"The download request scheme must not be nil";
+-        NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUDownloadError userInfo:@{ NSLocalizedDescriptionKey: message }];
+-        [_delegate downloaderDidFailWithError:error];
+-        
+-        return;
+-    }
+-    
+-    if ([scheme caseInsensitiveCompare:@"http"] != NSOrderedSame && [scheme caseInsensitiveCompare:@"https"] != NSOrderedSame) {
+-        NSString *message = [NSString stringWithFormat:@"The download request URL must use http or https (%@)", request.URL];
+-        NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUDownloadError userInfo:@{ NSLocalizedDescriptionKey: message }];
+-        [_delegate downloaderDidFailWithError:error];
+-        
+-        return;
+-    }
+-    
+-    _downloadSession = [NSURLSession
+-        sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+-        delegate:self
+-        delegateQueue:[NSOperationQueue mainQueue]];
+-    
+-    switch (_mode) {
+-        case SPUDownloadModePersistent:
+-            _sessionTask = [_downloadSession downloadTaskWithRequest:request];
+-            break;
+-        case SPUDownloadModeTemporary: {
+-            __weak __typeof__(self) weakSelf = self;
+-            _sessionTask = [_downloadSession dataTaskWithRequest:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+-                [weakSelf temporaryDownloadDidFinishWithData:data response:response error:error];
+-            }];
+-            break;
+-        }
+-    }
+-    
++    if (request == nil || !BeeSaveReleaseURL(request.URL)) {
++        [self failDownload:[self downloadPolicyError:@"Only pinned BeeSave HTTPS release assets are allowed."]];
++        return;
++    }
++    NSMutableURLRequest *safeRequest = [request mutableCopy];
++    safeRequest.timeoutInterval = 15;
++    safeRequest.HTTPShouldHandleCookies = NO;
++    [safeRequest setValue:nil forHTTPHeaderField:@"Authorization"];
++    [safeRequest setValue:nil forHTTPHeaderField:@"Cookie"];
++    _downloadSession = [NSURLSession sessionWithConfiguration:BeeSaveDownloadConfiguration()
++                                                   delegate:self delegateQueue:NSOperationQueue.mainQueue];
++    if (_mode == SPUDownloadModePersistent) {
++        _sessionTask = [_downloadSession downloadTaskWithRequest:safeRequest];
++    } else {
++        _temporaryData = [NSMutableData data];
++        _sessionTask = [_downloadSession dataTaskWithRequest:safeRequest];
++    }
+     [_sessionTask resume];
++}
++
++- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
++ willPerformHTTPRedirection:(NSHTTPURLResponse *)response newRequest:(NSURLRequest *)request
++ completionHandler:(void (^)(NSURLRequest *))completionHandler
++{
++    if (_finished || task != _sessionTask || ++_redirectCount > 5 ||
++        !BeeSaveDownloadURL(task.originalRequest.URL, request.URL)) {
++        completionHandler(nil);
++        [self failDownload:[self downloadPolicyError:@"The update redirect is not allowed."]];
++        return;
++    }
++    NSMutableURLRequest *safeRequest = [request mutableCopy];
++    safeRequest.HTTPShouldHandleCookies = NO;
++    [safeRequest setValue:nil forHTTPHeaderField:@"Authorization"];
++    [safeRequest setValue:nil forHTTPHeaderField:@"Cookie"];
++    completionHandler(safeRequest);
++}
++
++- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
++ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
++ completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential *))completionHandler
++{
++    // Keep normal TLS validation; never prompt for or transmit account credentials.
++    BOOL tls = [challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust];
++    completionHandler(tls ? NSURLSessionAuthChallengePerformDefaultHandling : NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
++}
++
++- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)task
++ didReceiveResponse:(NSURLResponse *)response completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler
++{
++    BOOL allowed = !_finished && task == _sessionTask && [self validateResponse:response];
++    completionHandler(allowed ? NSURLSessionResponseAllow : NSURLSessionResponseCancel);
++}
++
++- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)task didReceiveData:(NSData *)data
++{
++    if (_finished || task != _sessionTask) return;
++    if (data.length > BeeSaveFeedLimit - _temporaryData.length) {
++        [self failDownload:[self downloadPolicyError:@"The update feed exceeds 1 MiB."]];
++        return;
++    }
++    [_temporaryData appendData:data];
+ }
+ 
+ // Don't implement dealloc - make the client call cleanup, which is the only way to remove the reference cycle from the delegate anyway
+@@ -175,6 +227,7 @@
+     _sessionTask = nil;
+     _downloadSession = nil;
+     _delegate = nil;
++    _temporaryData = nil;
+ }
+ 
+ - (void)cleanup:(void (^)(void))completionHandler
+@@ -188,62 +241,14 @@
+     });
+ }
+ 
+-static bool SPUValidateStatusCodeAndFailIfInvalid(NSURLResponse * _Nullable response, NSURL *url, id<SPUDownloaderDelegate> delegate)
+-{
+-    NSInteger statusCode = [response isKindOfClass:[NSHTTPURLResponse class]] ? ((NSHTTPURLResponse *)response).statusCode : 200;
+-    
+-    if ((statusCode < 200) || (statusCode >= 400))
+-    {
+-        NSString *message = [NSString stringWithFormat:@"A network error occurred while downloading %@. %@ (%ld)", url.absoluteString, [NSHTTPURLResponse localizedStringForStatusCode:statusCode], (long)statusCode];
+-        NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUDownloadError userInfo:@{ NSLocalizedDescriptionKey: message }];
+-        [delegate downloaderDidFailWithError:error];
+-        
+-        return false;
+-    } else {
+-        return true;
+-    }
+-}
+-
+-- (void)temporaryDownloadDidFinishWithData:(NSData * _Nullable)data response:(NSURLResponse * _Nullable)response error:(NSError * _Nullable)error SPU_OBJC_DIRECT
+-{
+-    if (!SPUValidateStatusCodeAndFailIfInvalid(response, _sessionTask.originalRequest.URL, _delegate)) {
+-        return;
+-    }
+-    
+-    SPUDownloadData *downloadData = nil;
+-    if (data != nil) {
+-        NSURL *responseURL = response.URL;
+-        if (responseURL == nil) {
+-            responseURL = _sessionTask.currentRequest.URL;
+-        }
+-        if (responseURL == nil) {
+-            responseURL = _sessionTask.originalRequest.URL;
+-        }
+-        assert(responseURL != nil);
+-
+-        downloadData = [[SPUDownloadData alloc] initWithData:(NSData * _Nonnull)data URL:responseURL textEncodingName:response.textEncodingName MIMEType:response.MIMEType];
+-    }
+-    
+-    _sessionTask = nil;
+-    
+-    if (downloadData != nil) {
+-        [_delegate downloaderDidFinishWithTemporaryDownloadData:downloadData];
+-    } else {
+-        NSMutableDictionary *userInfo = [@{NSLocalizedDescriptionKey: @"Failed to download temporary data."} mutableCopy];
+-        
+-        if (error != nil) {
+-            userInfo[NSUnderlyingErrorKey] = error;
+-        }
+-        
+-        [_delegate downloaderDidFailWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SUDownloadError userInfo:userInfo]];
+-    }
+-    
+-    [self _cleanup];
+-}
+-
+ - (void)URLSession:(NSURLSession *)__unused session downloadTask:(NSURLSessionDownloadTask *)downloadTask didFinishDownloadingToURL:(NSURL *)location
+ {
+-    if (!SPUValidateStatusCodeAndFailIfInvalid(downloadTask.response, downloadTask.originalRequest.URL, _delegate)) {
++    if (_finished || downloadTask != _sessionTask || ![self validateResponse:downloadTask.response]) return;
++    NSNumber *size = nil;
++    NSError *sizeError = nil;
++    if (![location getResourceValue:&size forKey:NSURLFileSizeKey error:&sizeError] ||
++        size.unsignedLongLongValue > BeeSaveArchiveLimit) {
++        [self failDownload:sizeError ?: [self downloadPolicyError:@"The update archive exceeds 200 MiB."]];
+         return;
+     }
+     
+@@ -253,6 +258,7 @@
+     [SPULocalCacheDirectory removeOldItemsInDirectory:rootPersistentDownloadCachePath];
+     
+     NSString *tempDir = [SPULocalCacheDirectory createUniqueDirectoryInDirectory:rootPersistentDownloadCachePath];
++    _ownedDownloadDirectory = tempDir;
+     if (tempDir == nil)
+     {
+         // Okay, something's really broken with this user's file structure.
+@@ -261,7 +267,7 @@
+         
+         NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUTemporaryDirectoryError userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Can't make a temporary directory for the update download at %@.", tempDir] }];
+         
+-        [_delegate downloaderDidFailWithError:error];
++        [self failDownload:error];
+     } else {
+         NSString *downloadFileName = _desiredFilename;
+         NSString *downloadFileNameDirectory = [tempDir stringByAppendingPathComponent:downloadFileName];
+@@ -270,12 +276,14 @@
+         if (![[NSFileManager defaultManager] createDirectoryAtPath:downloadFileNameDirectory withIntermediateDirectories:NO attributes:nil error:&createError]) {
+             NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUTemporaryDirectoryError userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Can't make a download file name %@ directory inside temporary directory for the update download at %@.", downloadFileName, downloadFileNameDirectory] }];
+             
+-            [_delegate downloaderDidFailWithError:error];
++            [self failDownload:error];
+         } else {
+             NSString *name = _sessionTask.response.suggestedFilename;
+             if (!name) {
+                 name = location.lastPathComponent; // This likely contains nothing useful to identify the file (e.g. CFNetworkDownload_87LVIz.tmp)
+             }
++            name = name.lastPathComponent;
++            if (name.length == 0 || [name isEqualToString:@"."] || [name isEqualToString:@".."]) name = _desiredFilename.lastPathComponent;
+             NSString *toPath = [downloadFileNameDirectory stringByAppendingPathComponent:name];
+             NSString *fromPath = location.path; // suppress moveItemAtPath: non-null warning
+             NSError *error = nil;
+@@ -288,30 +296,36 @@
+                 NSError *bookmarkError = nil;
+                 NSData *bookmarkData = [downloadURL bookmarkDataWithOptions:(NSURLBookmarkCreationOptions)0 includingResourceValuesForKeys:@[] relativeToURL:nil error:&bookmarkError];
+                 if (bookmarkData == nil) {
+-                    [_delegate downloaderDidFailWithError:bookmarkError];
++                    [self failDownload:bookmarkError];
+                 } else {
+                     // The download token may be provided later to the downloader for removing a download
+                     // and its temporary directory
+                     NSString *downloadToken = tempDir.lastPathComponent;
+                     [_delegate downloaderDidSetDownloadBookmarkData:bookmarkData downloadToken:downloadToken];
+                     
+-                    _sessionTask = nil;
+-                    
++                    _finished = YES;
++                    _ownedDownloadDirectory = nil;
+                     [_delegate downloaderDidFinishWithTemporaryDownloadData:nil];
++                    [self _cleanup];
+                 }
+             } else {
+-                [_delegate downloaderDidFailWithError:error];
++                [self failDownload:error];
+             }
+         }
+     }
+ }
+ 
+-- (void)URLSession:(NSURLSession *)__unused session downloadTask:(NSURLSessionDownloadTask *)__unused downloadTask didWriteData:(int64_t)bytesWritten totalBytesWritten:(int64_t)__unused totalBytesWritten totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
+-{
+-    if (_mode != SPUDownloadModePersistent) {
+-        return;
+-    }
+-    
++- (void)URLSession:(NSURLSession *)__unused session downloadTask:(NSURLSessionDownloadTask *)__unused downloadTask didWriteData:(int64_t)bytesWritten totalBytesWritten:(int64_t)totalBytesWritten totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
++{
++    if (_finished || downloadTask != _sessionTask || _mode != SPUDownloadModePersistent) {
++        return;
++    }
++    
++    if (totalBytesWritten < 0 || (uint64_t)totalBytesWritten > BeeSaveArchiveLimit ||
++        (totalBytesExpectedToWrite > 0 && (uint64_t)totalBytesExpectedToWrite > BeeSaveArchiveLimit)) {
++        [self failDownload:[self downloadPolicyError:@"The update archive exceeds 200 MiB."]];
++        return;
++    }
+     if (!_receivedExpectedBytes) {
+         _receivedExpectedBytes = YES;
+         [_delegate downloaderDidReceiveExpectedContentLength:(totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown) ? totalBytesExpectedToWrite : 0];
+@@ -322,11 +336,17 @@
+     }
+ }
+ 
+-- (void)URLSession:(NSURLSession *)__unused session task:(NSURLSessionTask *)__unused task didCompleteWithError:(NSError *)error
+-{
+-    _sessionTask = nil;
++- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
++{
++    if (_finished || task != _sessionTask) return;
+     if (error != nil) {
+-        [_delegate downloaderDidFailWithError:error];
++        [self failDownload:error];
++    } else if (_mode == SPUDownloadModeTemporary && [self validateResponse:task.response]) {
++        SPUDownloadData *data = [[SPUDownloadData alloc] initWithData:_temporaryData URL:task.response.URL
++            textEncodingName:task.response.textEncodingName MIMEType:task.response.MIMEType];
++        _finished = YES;
++        [_delegate downloaderDidFinishWithTemporaryDownloadData:data];
++        [self _cleanup];
+     }
+ }
+ 

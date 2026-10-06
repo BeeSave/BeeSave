@@ -7,14 +7,9 @@ xcodebuild -quiet -project BeeSave.xcodeproj -scheme BeeSave \
   -configuration Release -destination 'generic/platform=macOS' \
   -derivedDataPath "$derived" build
 app="$derived/Build/Products/Release/BeeSave.app"
-codesign --verify --deep --strict "$app"
-mkdir -p "$project_dir/Dist"
-version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
-archive="$project_dir/Dist/BeeSave-${version}-arm64.zip"
-ditto -c -k --norsrc --keepParent "$app" "$archive"
-(cd "$project_dir/Dist" && shasum -a 256 "${archive:t}" > "${archive:t}.sha256")
-cp "$archive" "$project_dir/Dist/BeeSave-macos-arm64.zip"
-(cd "$project_dir/Dist" && shasum -a 256 BeeSave-macos-arm64.zip > BeeSave-macos-arm64.zip.sha256)
-python3 "$project_dir/scripts/generate_update_manifest.py" "$app" "$archive" "$project_dir/Dist/latest.json"
-print "Архив: $archive"
-print "Вложения GitHub Release: BeeSave-macos-arm64.zip, BeeSave-macos-arm64.zip.sha256, latest.json"
+if [[ -z "${BEESAVE_SPARKLE_TOOLS:-}" ]]; then
+  print "Укажите папку bin проверенного дистрибутива Sparkle 2.10.0 в BEESAVE_SPARKLE_TOOLS."
+  exit 1
+fi
+python3 "$project_dir/scripts/package_release.py" "$app" "$BEESAVE_SPARKLE_TOOLS"
+print "Вложения GitHub Release: DMG, подписанный appcast.xml, ZIP, SHA-256 обоих архивов и latest.json"

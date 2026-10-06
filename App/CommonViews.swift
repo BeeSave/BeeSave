@@ -75,6 +75,7 @@ struct EditorFrame<Content: View>: View {
             }.padding(20)
         }.frame(width: width, height: height).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.honey)
             .interactiveDismissDisabled(isDirty)
+            .modifier(UpdateFormGuard(active: true))
             .onDisappear { submitTask?.cancel() }
             .confirmationDialog("Сохранить изменения перед закрытием?", isPresented: $discard) {
                 Button("Сохранить", action: submit).disabled(!canSave || model.busy || submitting)
