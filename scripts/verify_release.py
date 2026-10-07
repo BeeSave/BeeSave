@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from release_entitlements import verify_app_entitlements
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
@@ -77,6 +78,7 @@ try:
         info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
         if info['CFBundleShortVersionString'] != version or info['CFBundleVersion'] != build or info['CFBundleIdentifier'] != 'com.mubudget.app': raise SystemExit('Packaged app metadata mismatch.')
         subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
+        verify_app_entitlements(app, root / 'App/BeeSave.entitlements')
     def tree(app):
         return {str(path.relative_to(app)): ('link', str(path.readlink())) if path.is_symlink() else ('file', hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_mode & 0o777) for path in app.rglob('*') if path.is_file() or path.is_symlink()}
     if tree(apps[0]) != tree(apps[1]): raise SystemExit('DMG and ZIP apps differ.')

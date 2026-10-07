@@ -7,6 +7,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+from release_entitlements import verify_app_entitlements
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
@@ -40,6 +41,7 @@ if tuple(int(part) for part in version.split('.')) >= (1, 3, 0):
 if info['CFBundleIdentifier'] != 'com.mubudget.app' or info.get('NSFaceIDUsageDescription'):
     raise SystemExit('Not a production password-only BeeSave package.')
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(args.app)], check=True)
+verify_app_entitlements(args.app, root / 'App/BeeSave.entitlements')
 args.output.mkdir(parents=True, exist_ok=True)
 workspace = Path(tempfile.mkdtemp(prefix='BeeSaveReleasePackage-'))
 folder = workspace / 'Image'
