@@ -22,8 +22,10 @@ extension ApplicationDelegate: UNUserNotificationCenterDelegate {
         let token = response.notification.request.content.userInfo["databaseToken"] as? String
         let event = response.notification.request.content.userInfo["eventToken"] as? String
         Task { @MainActor in
+            NSApp.activate(ignoringOtherApps: true)
+            BudgetWindows.bringForward()
             if let token, let event { model?.pendingFinancialRoute = (token, event); model?.handleFinancialNotification() }
-            NSApp.activate(ignoringOtherApps: true); completionHandler()
+            completionHandler()
         }
     }
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) { completionHandler([.banner, .sound]) }

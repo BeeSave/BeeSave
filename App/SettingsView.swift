@@ -78,6 +78,7 @@ struct SettingsView: View {
                 Text("Проверка macOS · отдельный вымышленный бюджет").font(.caption)
                 Button("Тест: одно событие через две минуты") { model.prepareNotificationFixture(count: 1) }
                 Button("Тест: плановый платёж через две минуты") { model.prepareNotificationFixture(count: 1, scheduled: true) }
+                Button("Тест: два плановых платежа") { model.prepareNotificationFixture(count: 2, scheduled: true) }
                 Button("Тест: очередь из 65 событий") { model.prepareNotificationFixture(count: 65) }
                 Button("Тест: проверить очередь и нейтральный текст") { Task { await model.inspectNotificationFixture() } }
                 #endif

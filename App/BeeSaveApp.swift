@@ -38,6 +38,7 @@ struct RootView: View {
     #endif
     var body: some View {
         Group { if model.db != nil { HomeView() } else { AccessView() } }.beeWindow()
+        .background(BudgetWindowMarker())
         .disabled(model.updateFrozen)
         #if DEBUG && UI_SMOKE
         .preferredColorScheme(model.previewAppearance)

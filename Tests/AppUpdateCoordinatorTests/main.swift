@@ -38,6 +38,17 @@ private struct Transport: AppUpdateTransport {
             let deadline = Date().addingTimeInterval(5)
             while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 5_000_000) }
         }
+        let budgetWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
+        let otherBudgetWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
+        let settingsWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
+        BudgetWindows.register(budgetWindow); BudgetWindows.register(otherBudgetWindow)
+        check(BudgetWindows.preferred(ordered: [settingsWindow, budgetWindow, otherBudgetWindow], key: settingsWindow) === budgetWindow,
+              "notification selects the budget window over foreground settings")
+        check(BudgetWindows.preferred(ordered: [budgetWindow, otherBudgetWindow], key: otherBudgetWindow) === otherBudgetWindow,
+              "notification preserves the active budget window")
+        BudgetWindows.unregister(budgetWindow); BudgetWindows.unregister(otherBudgetWindow)
+        check(BudgetWindows.preferred(ordered: [settingsWindow, budgetWindow], key: settingsWindow) == nil,
+              "notification does not select unrelated or detached windows")
         let model = AppModel()
         let raw = try Data(contentsOf: model.vault.url)
         let gate = try ReleaseGate()
@@ -66,6 +77,10 @@ private struct Transport: AppUpdateTransport {
         let parent = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: .titled, backing: .buffered, defer: false)
         let dialog = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 80, height: 80), styleMask: .titled, backing: .buffered, defer: false)
         parent.beginSheet(dialog, completionHandler: { _ in })
+        BudgetWindows.register(parent)
+        check(BudgetWindows.preferred(ordered: [settingsWindow, parent], key: dialog) === parent,
+              "notification preserves the budget owning an active sheet")
+        BudgetWindows.unregister(parent)
         updater.install()
         let afterDialog = try Data(contentsOf: model.vault.url)
         check({ if case .waiting = updater.state { return !model.updateFrozen && afterDialog == raw }; return false }(),
