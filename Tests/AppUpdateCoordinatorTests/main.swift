@@ -130,11 +130,35 @@ private struct Transport: AppUpdateTransport {
         check(!model.financialBusy && !model.financialEvents.isEmpty,
               "stale financial snapshot retries against current revision")
         let scheduled = ScheduledPayment(title: "Fixture payment", comment: "Fictional contract only", amount: 100, currency: "RUB", dueOn: Day.today.adding(1))
-        try model.commit { try ScheduledPayments.save(scheduled, in: &$0) }
+        let secondScheduled = ScheduledPayment(title: "Second fixture payment", comment: "Another fictional contract", amount: 200, currency: "RUB", dueOn: Day.today.adding(2))
+        try model.commit { db in
+            try ScheduledPayments.save(scheduled, in: &db)
+            try ScheduledPayments.save(secondScheduled, in: &db)
+        }
         try await wait { !model.financialBusy }
         let token = FinancialReminderPlanner.databaseToken(model.db!.id)
         model.pendingFinancialRoute = (token, scheduled.eventID); model.handleFinancialNotification()
         check(model.sheet?.kind == .scheduledDetail && model.sheet?.entityID == scheduled.id, "scheduled reminder routes to its payment")
+        model.pendingFinancialRoute = (token, secondScheduled.eventID); model.handleFinancialNotification()
+        check(model.sheet?.kind == .scheduledDetail && model.sheet?.entityID == secondScheduled.id,
+              "second reminder replaces an already open payment detail")
+        model.pendingFinancialRoute = (token, scheduled.eventID); model.handleFinancialNotification()
+        check(model.sheet?.entityID == scheduled.id, "consecutive reminders select their own payment")
+        let draft = SheetRoute(kind: .scheduledPayment, entityID: secondScheduled.id)
+        model.sheet = draft
+        model.pendingFinancialRoute = (token, scheduled.eventID); model.handleFinancialNotification()
+        check(model.sheet?.id == draft.id, "reminder preserves an unfinished payment editor")
+        model.sheet = SheetRoute(kind: .scheduledDetail, entityID: scheduled.id)
+        let otherWindowEditor = UUID(); model.updateForms.insert(otherWindowEditor)
+        model.pendingFinancialRoute = (token, secondScheduled.eventID); model.handleFinancialNotification()
+        check(model.sheet?.entityID == scheduled.id && model.updateForms.contains(otherWindowEditor),
+              "reminder preserves editors in other windows")
+        model.updateForms.remove(otherWindowEditor)
+        if let event = model.financialEvents.values.flatMap({ $0 }).first(where: { $0.kind == .depositInterest }) {
+            model.pendingFinancialRoute = (token, event.id); model.handleFinancialNotification()
+            check(model.sheet == nil && model.historyAccount != nil,
+                  "account reminder dismisses payment detail before showing account history")
+        } else { check(false, "deposit reminder fixture exists") }
         model.sheet = nil; model.lock(); model.pendingFinancialRoute = (token, scheduled.eventID); model.handleFinancialNotification()
         check(model.db == nil && model.sheet == nil && model.pendingFinancialRoute != nil, "locked budget keeps payment route without exposing its contents")
         model.unlock(password: "UI fixture password only")

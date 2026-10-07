@@ -6,12 +6,14 @@ extension AppModel {
         guard let route = pendingFinancialRoute, let db, !financialBusy, !updateFrozen else { return }
         pendingFinancialRoute = nil
         guard route.0 == FinancialReminderPlanner.databaseToken(db.id), let event = financialEvents.values.flatMap({ $0 }).first(where: { $0.id == route.1 }), !event.isFulfilled else { notice = "Напоминание больше не актуально. Проверьте финансовый календарь."; return }
-        guard sheet == nil && updateForms.isEmpty else { notice = "Финансовое событие доступно в календаре после завершения открытой формы."; return }
+        // A payment detail has no draft and may be replaced by the next reminder.
+        guard (sheet == nil || sheet?.kind == .scheduledDetail) && updateForms.isEmpty else { notice = "Финансовое событие доступно в календаре после завершения открытой формы."; return }
         if event.kind == .scheduledPayment {
             guard db.financeData.scheduledPayments?.contains(where: { $0.id == event.contractID && !$0.cancelled }) == true else { return }
             section = .expenses; showScheduledExpenses = true; sheet = SheetRoute(kind: .scheduledDetail, entityID: event.contractID); return
         }
         guard let contract = db.financeData.contracts.first(where: { $0.id == event.contractID }) else { return }
+        if sheet?.kind == .scheduledDetail { sheet = nil }
         openHistory(contract.accountID)
     }
     func cancelFinancialForecasts() { financialTask?.cancel(); financialTask = nil; financialCalculationID = UUID(); financialBusy = false }
