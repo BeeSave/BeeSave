@@ -1,5 +1,6 @@
 import AppKit
 import BudgetCore
+import BudgetPresentation
 
 private actor ReleaseGate {
     private var first: CheckedContinuation<Data, Never>?
@@ -35,6 +36,25 @@ private struct Transport: AppUpdateTransport {
         func check(_ condition: Bool, _ name: String) {
             if !condition { failures += 1; print("FAIL: " + name) } else { print("PASS: " + name) }
         }
+        let appearanceDomain = "com.beesave.appearance-test." + UUID().uuidString
+        let appearanceDefaults = UserDefaults(suiteName: appearanceDomain)!
+        defer { appearanceDefaults.removePersistentDomain(forName: appearanceDomain) }
+        let appearance = AppearanceStore(defaults: appearanceDefaults)
+        appearance.update { $0.textPercent = 160; $0.theme = .midnight }
+        check(AppearanceStore(defaults: appearanceDefaults).preferences == appearance.preferences,
+              "installation appearance survives a new store without opening a budget")
+        let retained = appearance.preferences
+        appearance.update { $0.textPercent = 200 }
+        check(appearance.preferences == retained, "invalid font scale cannot be persisted")
+        appearance.update { $0.custom.text = $0.custom.surface; $0.theme = .custom }
+        check(appearance.preferences == retained, "unreadable custom theme cannot be persisted")
+        appearance.update { $0.custom = .preset(.sepia); $0.theme = .custom }
+        appearance.update { $0.theme = .midnight }
+        check(appearance.preferences.custom == .preset(.sepia), "switching a preset preserves the last custom palette")
+        appearance.reset()
+        check(appearance.preferences == AppearancePreferences(), "appearance reset restores safe defaults")
+        appearanceDefaults.set(Data("broken".utf8), forKey: "BeeSave.appearance.v1")
+        check(AppearanceStore(defaults: appearanceDefaults).preferences == AppearancePreferences(), "corrupt installation preferences cannot block startup")
         func wait(_ condition: @MainActor () -> Bool) async throws {
             let deadline = Date().addingTimeInterval(5)
             while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 5_000_000) }

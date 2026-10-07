@@ -2,6 +2,7 @@ import SwiftUI
 import BudgetCore
 
 struct FinancialBankCalendarEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     var id: UUID?
@@ -13,12 +14,12 @@ struct FinancialBankCalendarEditor: View {
     @State private var source = "Введено вручную"
     var body: some View {
         EditorFrame(title: "Календарь банка", isDirty: true, height: 650, save: save) {
-            FormField(title: "Название") { TextField("Мой банковский календарь", text: $name).textFieldStyle(.roundedBorder) }
-            FormField(title: "Годы подтверждённого покрытия", hint: "Через запятую, например 2026, 2027. В других годах рабочий день остаётся неизвестным.") { TextField("2026, 2027", text: $years).textFieldStyle(.roundedBorder) }
+            FormField(title: "Название") { TextField("Мой банковский календарь", text: $name).textFieldStyle(BeeTextFieldStyle()) }
+            FormField(title: "Годы подтверждённого покрытия", hint: "Через запятую, например 2026, 2027. В других годах рабочий день остаётся неизвестным.") { TextField("2026, 2027", text: $years).textFieldStyle(BeeTextFieldStyle()) }
             FormField(title: "Праздники · одна дата YYYY-MM-DD в строке") { TextEditor(text: $holidays).frame(height: 110).border(BeeStyle.line.opacity(0.3)) }
             FormField(title: "Рабочие выходные · одна дата в строке") { TextEditor(text: $exceptions).frame(height: 90).border(BeeStyle.line.opacity(0.3)) }
-            FormField(title: "Источник") { TextField("Документ банка / ссылка / ручной ввод", text: $source).textFieldStyle(.roundedBorder) }
-            Text("Суббота и воскресенье считаются выходными. Рабочее исключение имеет приоритет над праздником. Изменение выбранного календаря пересчитает связанные договоры.").font(.caption).foregroundStyle(BeeStyle.muted)
+            FormField(title: "Источник") { TextField("Документ банка / ссылка / ручной ввод", text: $source).textFieldStyle(BeeTextFieldStyle()) }
+            Text("Суббота и воскресенье считаются выходными. Рабочее исключение имеет приоритет над праздником. Изменение выбранного календаря пересчитает связанные договоры.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
         }.onAppear {
             guard let value = model.db?.financeData.calendars.first(where: { $0.id == id }) else { return }
             name = value.name; years = value.years.map(String.init).joined(separator: ", "); holidays = value.holidays.map(\.rawValue).joined(separator: "\n"); exceptions = value.workingExceptions.map(\.rawValue).joined(separator: "\n"); source = value.source

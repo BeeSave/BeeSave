@@ -8,9 +8,10 @@ struct FinanceChoice<T: Hashable & CaseIterable>: View where T.AllCases: RandomA
     var title: String
     @Binding var value: T
     var titleOf: (T) -> String
-    var body: some View { FormField(title: title) { Picker(title, selection: $value) { ForEach(Array(T.allCases), id: \.self) { Text(titleOf($0)).tag($0) } }.labelsHidden() } }
+    var body: some View { FormField(title: title) { BeePicker(title, selection: $value) { ForEach(Array(T.allCases), id: \.self) { Text(titleOf($0)).tag($0) } }.labelsHidden() } }
 }
 struct FinanceMoneyField: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var title: String
     @Binding var value: Int64
     var currency: String
@@ -18,7 +19,7 @@ struct FinanceMoneyField: View {
     @State private var raw = ""
     @State private var loaded = false
     var body: some View {
-        FormField(title: title + " · " + currency) { TextField("0", text: $raw).textFieldStyle(.roundedBorder) }
+        FormField(title: title + " · " + currency) { TextField("0", text: $raw).textFieldStyle(BeeTextFieldStyle()) }
             .onAppear { raw = Money.string(value, currency: currency); loaded = true }
             .onChange(of: raw) { _, text in guard loaded else { return }; do { let amount = try Money.parse(text, currency: currency); guard amount >= 0 else { throw BudgetError.invalid(title + ": сумма не может быть отрицательной.") }; value = amount; errors[title] = nil } catch { errors[title] = title + ": " + error.localizedDescription } }
             .onChange(of: currency) { raw = Money.string(value, currency: currency) }
@@ -26,6 +27,7 @@ struct FinanceMoneyField: View {
     }
 }
 struct FinanceDateField: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var title: String
     var optional = true
     @Binding var value: Day?
@@ -48,6 +50,7 @@ private func optionalText(_ binding: Binding<String?>) -> Binding<String> { Bind
 private func optionalMoney(_ binding: Binding<Int64?>) -> Binding<Int64> { Binding(get: { binding.wrappedValue ?? 0 }, set: { binding.wrappedValue = $0 == 0 ? nil : $0 }) }
 
 struct FinancialContractFields: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @Binding var contract: FinancialContract
     var currency: String
@@ -57,7 +60,7 @@ struct FinancialContractFields: View {
     @State private var advanced = false
     @State private var start = ""
     var body: some View {
-        Divider(); Text("Условия договора").font(.headline)
+        Divider(); Text("Условия договора").beeFont(.headline)
         FinanceChoice(title: "Рынок", value: $contract.market, titleOf: { $0.title }).onChange(of: contract.market) { _, market in
             if ["Europe/Moscow", "Europe/London", "America/New_York"].contains(contract.timeZoneID) { contract.timeZoneID = market == .gb ? "Europe/London" : market == .us ? "America/New_York" : "Europe/Moscow" }
         }
@@ -69,22 +72,22 @@ struct FinancialContractFields: View {
         if contract.frequency == .everyNDays { Stepper("Каждые \(contract.everyNDays) дней", value: $contract.everyNDays, in: 1...366) }
         if contract.frequency == .twiceMonthly { Stepper("Вторая дата месяца: \(contract.secondPaymentDay)", value: $contract.secondPaymentDay, in: 1...31) }
         FormField(title: "Счёт оплаты") { accountPicker($contract.paymentAccountID) }
-        FormField(title: "Версия условий") { Picker("Версия", selection: $selected) { ForEach(contract.terms.indices, id: \.self) { Text("С " + contract.terms[$0].effectiveFrom.rawValue).tag($0) } }.labelsHidden() }
+        FormField(title: "Версия условий") { BeePicker("Версия", selection: $selected) { ForEach(contract.terms.indices, id: \.self) { Text("С " + contract.terms[$0].effectiveFrom.rawValue).tag($0) } }.labelsHidden() }
         Button("Добавить изменение условий") { var copy = contract.terms[min(selected, contract.terms.count - 1)]; copy.id = UUID(); copy.effectiveFrom = .today; contract.terms.append(copy); selected = contract.terms.count - 1 }
         FinancialTermFields(terms: $contract.terms[min(selected, contract.terms.count - 1)], kind: contract.kind, currency: currency, payoutFrequency: contract.frequency, errors: $errors).id(contract.terms[min(selected, contract.terms.count - 1)].id)
-        if let periods = contract.previousPeriods, !periods.isEmpty { DisclosureGroup("Предыдущие сроки · \(periods.count)") { ForEach(periods) { period in VStack(alignment: .leading, spacing: 4) { Text(period.start.rawValue + " — " + (period.end?.rawValue ?? "Без окончания")); ForEach(period.terms) { Text("С " + $0.effectiveFrom.rawValue + ": " + ($0.annualPercent.map { $0 + "%" } ?? "Ставка неизвестна") + " · " + $0.basis.title).font(.caption) } } } } }
+        if let periods = contract.previousPeriods, !periods.isEmpty { DisclosureGroup("Предыдущие сроки · \(periods.count)") { ForEach(periods) { period in VStack(alignment: .leading, spacing: 4) { Text(period.start.rawValue + " — " + (period.end?.rawValue ?? "Без окончания")); ForEach(period.terms) { Text("С " + $0.effectiveFrom.rawValue + ": " + ($0.annualPercent.map { $0 + "%" } ?? "Ставка неизвестна") + " · " + $0.basis.title).beeFont(.caption) } } } } }
         DisclosureGroup("Календарь и напоминания", isExpanded: $advanced) {
             VStack(alignment: .leading, spacing: 12) {
-                TextField("Название продукта", text: $contract.productName).textFieldStyle(.roundedBorder)
-                TextField("Примечание", text: $contract.note, axis: .vertical).textFieldStyle(.roundedBorder)
+                TextField("Название продукта", text: $contract.productName).textFieldStyle(BeeTextFieldStyle())
+                TextField("Примечание", text: $contract.note, axis: .vertical).textFieldStyle(BeeTextFieldStyle())
                 FinanceChoice(title: "Перенос нерабочего дня", value: $contract.businessDayRule, titleOf: { $0.title })
-                FormField(title: "Календарь банка") { Picker("Календарь", selection: $contract.calendarID) { Text("Только выходные; праздники неизвестны").tag(nil as UUID?); ForEach(model.db?.financeData.calendars ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
+                FormField(title: "Календарь банка") { BeePicker("Календарь", selection: $contract.calendarID) { Text("Только выходные; праздники неизвестны").tag(nil as UUID?); ForEach(model.db?.financeData.calendars ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
                 Button(contract.calendarID == nil ? "Создать календарь банка…" : "Изменить календарь банка…") { showCalendarEditor = true }.sheet(isPresented: $showCalendarEditor) { FinancialBankCalendarEditor(id: contract.calendarID) { contract.calendarID = $0 } }
-                TextField("Часовой пояс, например Europe/London", text: $contract.timeZoneID).textFieldStyle(.roundedBorder)
+                TextField("Часовой пояс, например Europe/London", text: $contract.timeZoneID).textFieldStyle(BeeTextFieldStyle())
                 Toggle("Есть предельный час зачисления платежа", isOn: Binding(get: { contract.cutoffHour != nil }, set: { contract.cutoffHour = $0 ? 17 : nil }))
                 if contract.cutoffHour != nil {
                     Stepper("Зачисление до \(contract.cutoffHour ?? 17):00 · время банка", value: Binding(get: { contract.cutoffHour ?? 17 }, set: { contract.cutoffHour = $0 }), in: 0...23)
-                    Picker("Начисление после предельного часа", selection: $contract.lateCreditPosting) {
+                    BeePicker("Начисление после предельного часа", selection: $contract.lateCreditPosting) {
                         Text("Уточнить по договору").tag(nil as LateCreditPosting?)
                         ForEach(LateCreditPosting.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
                     }
@@ -98,15 +101,17 @@ struct FinancialContractFields: View {
                 Stepper("Минута: \(contract.reminders.minute)", value: $contract.reminders.minute, in: 0...59)
             }.padding(.top, 10)
         }
-        Text("Прогноз не создаёт операции. Подтверждайте выплаты по фактическим суммам банка.").font(.caption).foregroundStyle(BeeStyle.muted)
+        Text("Прогноз не создаёт операции. Подтверждайте выплаты по фактическим суммам банка.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
     }
-    @ViewBuilder private func accountPicker(_ binding: Binding<UUID?>) -> some View { Picker("Счёт", selection: binding) { Text("Не выбран").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
+    @ViewBuilder private func accountPicker(_ binding: Binding<UUID?>) -> some View { BeePicker("Счёт", selection: binding) { Text("Не выбран").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
 }
 struct ReminderOffsetsField: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var title: String; @Binding var values: [Int]; @Binding var errors: [String: String]; @State private var raw = ""
-    var body: some View { FormField(title: title) { TextField("7, 3, 1, 0", text: $raw).textFieldStyle(.roundedBorder) }.onAppear { raw = values.map(String.init).joined(separator: ", ") }.onChange(of: raw) { _, text in let parts = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }; let numbers = parts.compactMap(Int.init); if numbers.count == parts.count && numbers.allSatisfy({ (0...3650).contains($0) }) { values = Array(Set(numbers)).sorted(by: >); errors[title] = nil } else { errors[title] = title + ": введите целые дни от 0 до 3650." } } }
+    var body: some View { FormField(title: title) { TextField("7, 3, 1, 0", text: $raw).textFieldStyle(BeeTextFieldStyle()) }.onAppear { raw = values.map(String.init).joined(separator: ", ") }.onChange(of: raw) { _, text in let parts = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }; let numbers = parts.compactMap(Int.init); if numbers.count == parts.count && numbers.allSatisfy({ (0...3650).contains($0) }) { values = Array(Set(numbers)).sorted(by: >); errors[title] = nil } else { errors[title] = title + ": введите целые дни от 0 до 3650." } } }
 }
 struct FinancialTermFields: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @Binding var terms: FinancialTerms
     var kind: AccountKind; var currency: String
@@ -116,7 +121,7 @@ struct FinancialTermFields: View {
     @State private var advanced = false
     var body: some View {
         DayField(title: "Эти условия действуют с", value: $effective).onAppear { effective = terms.effectiveFrom.rawValue }.onChange(of: effective) { _, text in do { terms.effectiveFrom = try Day(text); errors["termsDate"] = nil } catch { errors["termsDate"] = error.localizedDescription } }
-        FormField(title: "Процентная ставка, %", hint: "Пустое поле означает неизвестную ставку; 0 — беспроцентный договор.") { TextField("Например, 12", text: optionalText($terms.annualPercent)).textFieldStyle(.roundedBorder) }
+        FormField(title: "Процентная ставка, %", hint: "Пустое поле означает неизвестную ставку; 0 — беспроцентный договор.") { TextField("Например, 12", text: optionalText($terms.annualPercent)).textFieldStyle(BeeTextFieldStyle()) }
         FinanceChoice(title: "Вид ставки", value: $terms.rateKind, titleOf: { $0.title })
         FinanceChoice(title: "База начисления", value: $terms.basis, titleOf: { $0.title })
         if kind == .deposit { depositFields }
@@ -128,16 +133,16 @@ struct FinancialTermFields: View {
                 FinanceChoice(title: "Когда округлять", value: $terms.roundingPoint, titleOf: { $0 == .daily ? "Каждый день" : "На выплате" })
                 FinanceChoice(title: "Остаток для начисления", value: $terms.balanceBasis, titleOf: { switch $0 { case .openingDay: "На начало дня"; case .closingDay: "На конец дня"; case .minimumPeriod: "Минимальный за период" } })
                 Toggle("Включать первый день периода", isOn: $terms.includeFirstDay); Toggle("Включать последний день периода", isOn: $terms.includeLastDay)
-                TextField("Индекс, например SOFR / SONIA", text: $terms.indexName).textFieldStyle(.roundedBorder)
-                TextField("Значение индекса, %", text: optionalText($terms.indexPercent)).textFieldStyle(.roundedBorder)
-                TextField("Маржа, %", text: optionalText($terms.marginPercent)).textFieldStyle(.roundedBorder)
-                TextField("Минимальная ставка, %", text: optionalText($terms.floorPercent)).textFieldStyle(.roundedBorder)
-                TextField("Максимальная ставка, %", text: optionalText($terms.capPercent)).textFieldStyle(.roundedBorder)
+                TextField("Индекс, например SOFR / SONIA", text: $terms.indexName).textFieldStyle(BeeTextFieldStyle())
+                TextField("Значение индекса, %", text: optionalText($terms.indexPercent)).textFieldStyle(BeeTextFieldStyle())
+                TextField("Маржа, %", text: optionalText($terms.marginPercent)).textFieldStyle(BeeTextFieldStyle())
+                TextField("Минимальная ставка, %", text: optionalText($terms.floorPercent)).textFieldStyle(BeeTextFieldStyle())
+                TextField("Максимальная ставка, %", text: optionalText($terms.capPercent)).textFieldStyle(BeeTextFieldStyle())
                 FinanceDateField(title: "Пересмотр ставки", value: $terms.resetOn, errors: $errors)
                 Toggle("Ставка задана для сценария", isOn: $terms.scenarioRate)
-                TextField("Справочный показатель: APY / AER / APR / ПСК", text: $terms.comparisonRateLabel).textFieldStyle(.roundedBorder)
-                TextField("Справочное значение, %", text: optionalText($terms.comparisonRate)).textFieldStyle(.roundedBorder)
-                TextField("Источник условий", text: $terms.source).textFieldStyle(.roundedBorder)
+                TextField("Справочный показатель: APY / AER / APR / ПСК", text: $terms.comparisonRateLabel).textFieldStyle(BeeTextFieldStyle())
+                TextField("Справочное значение, %", text: optionalText($terms.comparisonRate)).textFieldStyle(BeeTextFieldStyle())
+                TextField("Источник условий", text: $terms.source).textFieldStyle(BeeTextFieldStyle())
             }.padding(.top, 10)
         }
     }
@@ -148,22 +153,22 @@ struct FinancialTermFields: View {
             FinanceChoice(title: "Период начисления", value: Binding(get: { terms.deposit.accrualFrequency ?? .monthly }, set: { terms.deposit.accrualFrequency = $0 }), titleOf: { $0.title })
             if terms.deposit.capitalize { FinanceChoice(title: "Период капитализации", value: Binding(get: { terms.deposit.capitalizationFrequency ?? .monthly }, set: { terms.deposit.capitalizationFrequency = $0 }), titleOf: { $0.title }) }
             Toggle("Округлять только финальную выплату", isOn: Binding(get: { terms.deposit.roundOnlyAtFinalPayout == true }, set: { terms.deposit.roundOnlyAtFinalPayout = $0 })).disabled(payoutFrequency != .maturity)
-            if payoutFrequency != .maturity { Text("Для округления только в конце выберите выплату процентов «В конце срока».").font(.caption).foregroundStyle(BeeStyle.muted) }
+            if payoutFrequency != .maturity { Text("Для округления только в конце выберите выплату процентов «В конце срока».").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
         }
-        FormField(title: "Счёт внешней выплаты процентов") { Picker("Счёт", selection: $terms.deposit.payoutAccountID) { Text(terms.deposit.capitalize ? "Оставить на депозите" : "Указать при подтверждении").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.kind == .ordinary } ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
+        FormField(title: "Счёт внешней выплаты процентов") { BeePicker("Счёт", selection: $terms.deposit.payoutAccountID) { Text(terms.deposit.capitalize ? "Оставить на депозите" : "Указать при подтверждении").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.kind == .ordinary } ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
         Toggle("Разрешено пополнение", isOn: $terms.deposit.allowTopUp); Toggle("Разрешено частичное снятие", isOn: $terms.deposit.allowWithdrawal)
         FinanceMoneyField(title: "Неснижаемый остаток", value: $terms.deposit.minimumBalance, currency: currency, errors: $errors)
         Toggle("Условия налога известны", isOn: $terms.deposit.taxKnown)
         if terms.deposit.taxKnown {
-            TextField("Удержание налога, %", text: optionalText($terms.deposit.taxPercent)).textFieldStyle(.roundedBorder)
+            TextField("Удержание налога, %", text: optionalText($terms.deposit.taxPercent)).textFieldStyle(BeeTextFieldStyle())
             Toggle("Оплачивать налог отдельно от процентов", isOn: Binding(get: { terms.deposit.separateTaxFrequency != nil }, set: { terms.deposit.separateTaxFrequency = $0 ? .yearly : nil }))
             if terms.deposit.separateTaxFrequency != nil {
                 FinanceChoice(title: "Период оплаты налога", value: Binding(get: { terms.deposit.separateTaxFrequency ?? .yearly }, set: { terms.deposit.separateTaxFrequency = $0 }), titleOf: { $0.title })
-                Picker("Счёт оплаты налога", selection: $terms.deposit.taxPaymentAccountID) { Text("Указать при подтверждении").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.kind == .ordinary } ?? []) { Text($0.name).tag(Optional($0.id)) } }
+                BeePicker("Счёт оплаты налога", selection: $terms.deposit.taxPaymentAccountID) { Text("Указать при подтверждении").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.kind == .ordinary } ?? []) { Text($0.name).tag(Optional($0.id)) } }
             }
         }
         FinanceDateField(title: "Решение о продлении до", value: $terms.deposit.renewalDecisionOn, errors: $errors)
-        TextField("Ставка при досрочном закрытии, %", text: optionalText($terms.deposit.earlyAnnualPercent)).textFieldStyle(.roundedBorder)
+        TextField("Ставка при досрочном закрытии, %", text: optionalText($terms.deposit.earlyAnnualPercent)).textFieldStyle(BeeTextFieldStyle())
     }
     @ViewBuilder private var creditFields: some View {
         FinanceMoneyField(title: "Кредитный лимит", value: $terms.credit.limit, currency: currency, errors: $errors)
@@ -174,7 +179,7 @@ struct FinancialTermFields: View {
         Stepper("Льгота: \(terms.credit.graceDays) дней", value: $terms.credit.graceDays, in: 0...3650)
         FinanceDateField(title: "Льгота / промо до", value: $terms.credit.graceEnd, errors: $errors)
         FinanceChoice(title: "Минимальный платёж", value: $terms.credit.minimumMode, titleOf: { switch $0 { case .fixed: "Фиксированная сумма"; case .percent: "Процент долга"; case .percentPlusCharges: "Процент тела + начисления"; case .manual: "По выписке вручную" } })
-        TextField("Минимальный платёж, %", text: $terms.credit.minimumPercent).textFieldStyle(.roundedBorder)
+        TextField("Минимальный платёж, %", text: $terms.credit.minimumPercent).textFieldStyle(BeeTextFieldStyle())
         FinanceMoneyField(title: "Минимальная сумма платежа", value: $terms.credit.minimumFloor, currency: currency, errors: $errors)
         FinanceMoneyField(title: "Фиксированный минимальный платёж", value: $terms.credit.minimumFixed, currency: currency, errors: $errors)
         FinanceChoice(title: "Начислять после потери льготы", value: $terms.credit.accrualAfterGrace, titleOf: { switch $0 { case .afterDeadline: "После крайней даты"; case .fromTransaction: "С даты покупки"; case .fromCycle: "С начала цикла" } })
@@ -187,9 +192,9 @@ struct FinancialTermFields: View {
                 Stepper("Полностью оплаченных выписок подряд: \(terms.credit.graceRestoreStatements ?? 1)", value: Binding(get: { terms.credit.graceRestoreStatements ?? 1 }, set: { terms.credit.graceRestoreStatements = $0 }), in: 1...120)
             }
         }
-        TextField("Штрафная ставка, % · необязательно", text: optionalText($terms.credit.penaltyAnnualPercent)).textFieldStyle(.roundedBorder)
+        TextField("Штрафная ставка, % · необязательно", text: optionalText($terms.credit.penaltyAnnualPercent)).textFieldStyle(BeeTextFieldStyle())
         if terms.credit.penaltyAnnualPercent != nil {
-            Picker("Штрафная ставка заменяет обычную до", selection: $terms.credit.penaltyUntilMinimumPaid) {
+            BeePicker("Штрафная ставка заменяет обычную до", selection: $terms.credit.penaltyUntilMinimumPaid) {
                 Text("Условие неизвестно").tag(nil as Bool?)
                 Text("Погашения просроченного минимума").tag(Optional(true))
                 Text("Указанной даты").tag(Optional(false))
@@ -200,7 +205,7 @@ struct FinancialTermFields: View {
         Toggle("Отдельное правило для суммы сверх минимума", isOn: Binding(get: { terms.credit.excessRepaymentOrder != nil }, set: { terms.credit.excessRepaymentOrder = $0 ? .highestRate : nil }))
         if terms.credit.excessRepaymentOrder != nil { FinanceChoice(title: "Сверх минимального платежа", value: Binding(get: { terms.credit.excessRepaymentOrder ?? .highestRate }, set: { terms.credit.excessRepaymentOrder = $0 }), titleOf: { $0.title }) }
         ForEach(terms.credit.buckets.indices, id: \.self) { index in
-            VStack(alignment: .leading) { Text(terms.credit.buckets[index].kind.title).font(.subheadline.bold()); TextField("Отдельная ставка, %", text: optionalText($terms.credit.buckets[index].annualPercent)).textFieldStyle(.roundedBorder); Toggle("Применяется льгота", isOn: $terms.credit.buckets[index].eligibleForGrace) }
+            VStack(alignment: .leading) { Text(terms.credit.buckets[index].kind.title).beeFont(.subheadline.bold()); TextField("Отдельная ставка, %", text: optionalText($terms.credit.buckets[index].annualPercent)).textFieldStyle(BeeTextFieldStyle()); Toggle("Применяется льгота", isOn: $terms.credit.buckets[index].eligibleForGrace) }
         }
         FinanceMoneyField(title: "Комиссия за просрочку", value: $terms.credit.lateFee, currency: currency, errors: $errors)
     }
@@ -210,18 +215,19 @@ struct FinancialTermFields: View {
         FinanceMoneyField(title: "Платёж банка (0 — рассчитать)", value: optionalMoney($terms.loan.paymentOverride), currency: currency, errors: $errors)
         FinanceMoneyField(title: "Комиссия за платёж", value: $terms.loan.paymentFee, currency: currency, errors: $errors)
         FinanceMoneyField(title: "Взнос escrow", value: $terms.loan.escrowPayment, currency: currency, errors: $errors)
-        FormField(title: "Счёт escrow") { Picker("Счёт", selection: $terms.loan.escrowAccountID) { Text("Не выбран").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived } ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
+        FormField(title: "Счёт escrow") { BeePicker("Счёт", selection: $terms.loan.escrowAccountID) { Text("Не выбран").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived } ?? []) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
         FinanceDateField(title: "Кредитные каникулы до", value: $terms.loan.holidayEnd, errors: $errors)
         Toggle("Начислять проценты во время каникул", isOn: $terms.loan.accrueDuringHoliday)
         Toggle("Капитализировать проценты во время каникул", isOn: $terms.loan.capitalizeDuringHoliday)
         FinanceDateField(title: "Период interest-only до", value: $terms.loan.interestOnlyEnd, errors: $errors)
         FinanceDateField(title: "Окончание фиксированной ставки", value: $terms.loan.fixedDealEnd, errors: $errors)
-        TextField("Комиссия досрочного погашения, %", text: optionalText($terms.loan.prepaymentFeePercent)).textFieldStyle(.roundedBorder)
+        TextField("Комиссия досрочного погашения, %", text: optionalText($terms.loan.prepaymentFeePercent)).textFieldStyle(BeeTextFieldStyle())
         repaymentFields
     }
 }
 
 struct BankMark: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var bankID: String?; var fallback = "building.columns"
     private var customPicture: NSImage? {
@@ -236,15 +242,16 @@ struct BankMark: View {
         Group {
             if let customPicture { Image(nsImage: customPicture).resizable().scaledToFit() }
             else if let catalogPicture { Image(nsImage: catalogPicture).renderingMode(.template).resizable().scaledToFit() }
-            else { Image(systemName: fallback).font(.system(size: 19, weight: .medium)) }
+            else { Image(systemName: fallback).beeFont(.system(size: 19, weight: .medium)) }
         }
-        .foregroundStyle(BeeStyle.honeyText)
+        .foregroundStyle(BeeStyle.color(0x173F42))
         .frame(width: 24, height: 24).padding(5)
-        .background(BeeStyle.honey, in: RoundedRectangle(cornerRadius: 9))
+        .background(BeeStyle.color(0xF7C756), in: RoundedRectangle(cornerRadius: 9))
         .accessibilityLabel(model.db?.financialBankName(bankID) ?? "Без банка")
     }
 }
 struct BankPicker: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @Binding var bankID: String?
     @State private var search = ""
@@ -253,16 +260,17 @@ struct BankPicker: View {
     var body: some View {
         DisclosureGroup(model.db?.financialBankName(bankID) ?? "Банк · необязательно", isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 10) {
-                TextField("Поиск банка", text: $search).textFieldStyle(.roundedBorder)
+                TextField("Поиск банка", text: $search).textFieldStyle(BeeTextFieldStyle())
                 Button("Без банка") { bankID = nil; expanded = false }
-                ForEach(model.db?.financeData.banks.filter { !$0.archived && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) } ?? []) { bank in Button { bankID = bank.id; expanded = false } label: { HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country.rawValue) } }.buttonStyle(.plain) }
-                ForEach(Array(BankCatalog.shared.search(search).prefix(40))) { bank in Button { bankID = bank.id; expanded = false } label: { HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country) } }.buttonStyle(.plain) }
+                ForEach(model.db?.financeData.banks.filter { !$0.archived && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) } ?? []) { bank in Button { bankID = bank.id; expanded = false } label: { HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country.rawValue) } }.buttonStyle(BeeRowStyle()) }
+                ForEach(Array(BankCatalog.shared.search(search).prefix(40))) { bank in Button { bankID = bank.id; expanded = false } label: { HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country) } }.buttonStyle(BeeRowStyle()) }
                 Button("Добавить банк вручную…") { showManual = true }
             }.padding(.top, 10)
         }.sheet(isPresented: $showManual) { BankEditor(onSaved: { bankID = $0; expanded = false }) }
     }
 }
 struct BankEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var bank: UserBank? = nil
     var onSaved: (String) -> Void = { _ in }
@@ -276,13 +284,13 @@ struct BankEditor: View {
             var copy = bank ?? UserBank(name: name); copy.name = name; copy.country = country; copy.logo = logo; copy.note = note
             try model.commit { try FinancialLedger.saveBank(copy, in: &$0) }; onSaved(copy.id)
         }) {
-            TextField("Название банка", text: $name).textFieldStyle(.roundedBorder)
+            TextField("Название банка", text: $name).textFieldStyle(BeeTextFieldStyle())
             FinanceChoice(title: "Страна", value: $country, titleOf: { $0.title })
             if let logo, let image = NSImage(data: logo) { Image(nsImage: image).resizable().scaledToFit().frame(width: 80, height: 80) }
             HStack { Button("Выбрать PNG / JPEG…", action: selectImage); Button("Убрать изображение") { logo = nil }.disabled(logo == nil) }
-            if !imageError.isEmpty { Text(imageError).foregroundStyle(BeeStyle.negative).font(.caption) }
-            TextField("Примечание", text: $note).textFieldStyle(.roundedBorder)
-            Text("Банк и изображение сохраняются в зашифрованной базе. Изображение используется только локально.").font(.caption).foregroundStyle(BeeStyle.muted)
+            if !imageError.isEmpty { Text(imageError).foregroundStyle(BeeStyle.negative).beeFont(.caption) }
+            TextField("Примечание", text: $note).textFieldStyle(BeeTextFieldStyle())
+            Text("Банк и изображение сохраняются в зашифрованной базе. Изображение используется только локально.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
         }.onAppear { name = bank?.name ?? ""; country = bank?.country ?? .other; logo = bank?.logo; note = bank?.note ?? "" }
     }
     private func selectImage() {
@@ -302,17 +310,18 @@ struct BankEditor: View {
     }
 }
 struct BankReferenceList: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var search: String; var archived: Bool
     @State private var editing: UserBank?
     var body: some View {
-        Text("Свои банки").font(.headline)
+        Text("Свои банки").beeFont(.headline)
         ForEach(model.db?.financeData.banks.filter { (archived || !$0.archived) && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) } ?? []) { bank in
             HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country.rawValue); Spacer(); Button("Изменить") { editing = bank }; Button(bank.archived ? "Вернуть" : "Архивировать") { model.perform { db in var copy = bank; copy.archived.toggle(); try FinancialLedger.saveBank(copy, in: &db) } } }.padding(.vertical, 8)
         }
-        Divider(); Text("Каталог: \(BankCatalog.shared.banks.count) записей · \(BankCatalog.shared.manifest.builtOn)").font(.headline)
-        ForEach(Array(BankCatalog.shared.search(search, includeInactive: archived).prefix(150))) { bank in HStack { BankMark(bankID: bank.id); Text(bank.name); Spacer(); Text(bank.country).font(.caption) }.padding(.vertical, 6) }
-        if !BankCatalog.shared.manifest.logosComplete { Text("Иконки банков ещё проходят проверку.").font(.caption).foregroundStyle(BeeStyle.warning) }
+        Divider(); Text("Каталог: \(BankCatalog.shared.banks.count) записей · \(BankCatalog.shared.manifest.builtOn)").beeFont(.headline)
+        ForEach(Array(BankCatalog.shared.search(search, includeInactive: archived).prefix(150))) { bank in HStack { BankMark(bankID: bank.id); Text(bank.name); Spacer(); Text(bank.country).beeFont(.caption) }.padding(.vertical, 6) }
+        if !BankCatalog.shared.manifest.logosComplete { Text("Иконки банков ещё проходят проверку.").beeFont(.caption).foregroundStyle(BeeStyle.warning) }
         EmptyView().sheet(item: $editing) { BankEditor(bank: $0) }
     }
 }
@@ -322,6 +331,7 @@ private enum FinanceAction: Identifiable {
     var id: String { switch self { case .payment(let event): "payment-" + (event?.id ?? "manual"); case .statement: "statement"; case .manualRow: "manual"; case .scenario: "scenario"; case .issue: "issue"; case .depositExit: "exit"; case .renewal: "renewal" } }
 }
 struct FinancialAccountDetail: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var accountID: UUID
     @State private var action: FinanceAction?
@@ -329,10 +339,10 @@ struct FinancialAccountDetail: View {
     var body: some View {
         if let db = model.db, let account = db.accounts.first(where: { $0.id == accountID }), let contract = db.contract(for: accountID) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack { Text(account.kind.title + " · " + contract.status.title).font(.headline); if let name = db.financialBankName(account.bankID) { Text(name).foregroundStyle(BeeStyle.muted) }; Spacer(); Button("Условия") { model.sheet = SheetRoute(kind: .account, entityID: accountID) }; if !account.archived && contract.status != .closed { Button(account.kind == .deposit ? "Подтвердить проценты" : "Платёж") { action = .payment(nil) } } }
+                HStack { Text(account.kind.title + " · " + contract.status.title).beeFont(.headline); if let name = db.financialBankName(account.bankID) { Text(name).foregroundStyle(BeeStyle.muted) }; Spacer(); Button("Условия") { model.sheet = SheetRoute(kind: .account, entityID: accountID) }; if !account.archived && contract.status != .closed { Button(account.kind == .deposit ? "Подтвердить проценты" : "Платёж") { action = .payment(nil) } } }
                 if account.kind.isDebt, let debt = try? FinancialLedger.debt(accountID: accountID, db: db) {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 10) { FinanceValue(title: "Задолженность", amount: debt.debt, currency: account.currency); FinanceValue(title: "Тело долга", amount: debt.amount(.principal), currency: account.currency); FinanceValue(title: "Собственные средства", amount: debt.ownFunds, currency: account.currency); if let limit = debt.limit { FinanceValue(title: "Лимит", amount: limit, currency: account.currency); FinanceValue(title: "Доступно", amount: debt.available, currency: account.currency) } }
-                    if debt.amount(.unallocated) > 0 { Label("Есть нераспределённый долг. Уточните состав для точного прогноза.", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(BeeStyle.warning) }
+                    if debt.amount(.unallocated) > 0 { Label("Есть нераспределённый долг. Уточните состав для точного прогноза.", systemImage: "exclamationmark.triangle").beeFont(.caption).foregroundStyle(BeeStyle.warning) }
                 }
                 Menu("Действия по договору") {
                     if account.kind == .revolvingCredit { Button("Ввести выписку") { action = .statement } }
@@ -342,7 +352,7 @@ struct FinancialAccountDetail: View {
                     if contract.status == .active { Button("Закрыть договор") { model.perform { try FinancialLedger.closeContract(contract.id, in: &$0) } } }
                 }.disabled(account.archived)
                 DisclosureGroup("График · \((model.financialEvents[contract.id] ?? []).count) событий", isExpanded: $expanded) { ScrollView { FinanceEventList(contract: contract, events: model.financialEvents[contract.id] ?? [], onConfirm: { action = .payment($0) }) }.frame(maxHeight: 230) }
-                if let error = model.financialErrors[contract.id] { Text(error).font(.caption).foregroundStyle(BeeStyle.warning) }
+                if let error = model.financialErrors[contract.id] { Text(error).beeFont(.caption).foregroundStyle(BeeStyle.warning) }
             }.beeCard().padding(.horizontal, 24)
                 .sheet(item: $action) { action in switch action {
                 case .payment(let event): FinancialPaymentEditor(contract: contract, event: event)
@@ -357,10 +367,12 @@ struct FinancialAccountDetail: View {
     }
 }
 struct FinanceValue: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var title: String; var amount: Int64?; var currency: String
-    var body: some View { VStack(alignment: .leading, spacing: 4) { Text(title).font(.caption).foregroundStyle(BeeStyle.muted); Text(amount.map { BeeFormat.money($0, currency: currency) } ?? "Неизвестно").monospacedDigit() } }
+    var body: some View { VStack(alignment: .leading, spacing: 4) { Text(title).beeFont(.caption).foregroundStyle(BeeStyle.muted); Text(amount.map { BeeFormat.money($0, currency: currency) } ?? "Неизвестно").monospacedDigit() } }
 }
 struct FinanceEventList: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var contract: FinancialContract
     var events: [FinanceEvent]
@@ -369,15 +381,15 @@ struct FinanceEventList: View {
         LazyVStack(alignment: .leading, spacing: 12) {
             ForEach(events) { event in
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack { Text(CalendarDays.label(event.date)).font(.caption); Text(event.kind.title).font(.headline); Spacer(); Text(event.remaining.map { BeeFormat.money($0, currency: (try? model.db?.account(contract.accountID).currency) ?? "RUB") } ?? "Уточните сумму").monospacedDigit(); if event.isFulfilled { Label("Исполнено", systemImage: "checkmark.circle").font(.caption) } else if [.depositInterest, .loanPayment, .gracePayment, .minimumPayment].contains(event.kind) || event.kind == .tax && contract.kind == .deposit { Button("Подтвердить") { onConfirm(event) }.disabled(model.financialBusy || event.date > .today || model.db?.accounts.first(where: { $0.id == contract.accountID })?.archived == true) } }
+                    HStack { Text(CalendarDays.label(event.date)).beeFont(.caption); Text(event.kind.title).beeFont(.headline); Spacer(); Text(event.remaining.map { BeeFormat.money($0, currency: (try? model.db?.account(contract.accountID).currency) ?? "RUB") } ?? "Уточните сумму").monospacedDigit(); if event.isFulfilled { Label("Исполнено", systemImage: "checkmark.circle").beeFont(.caption) } else if [.depositInterest, .loanPayment, .gracePayment, .minimumPayment].contains(event.kind) || event.kind == .tax && contract.kind == .deposit { Button("Подтвердить") { onConfirm(event) }.disabled(model.financialBusy || event.date > .today || model.db?.accounts.first(where: { $0.id == contract.accountID })?.archived == true) } }
                     HStack {
-                        if let until = model.db?.financeData.reminders.eventSnoozedUntil?[event.id], until > Date() { Text("Напоминание отложено до " + until.formatted(date: .numeric, time: .shortened)).font(.caption) }
+                        if let until = model.db?.financeData.reminders.eventSnoozedUntil?[event.id], until > Date() { Text("Напоминание отложено до " + until.formatted(date: .numeric, time: .shortened)).beeFont(.caption) }
                         Spacer()
-                        if !event.isFulfilled { Menu("Напоминания") { Button("Отложить на один день") { model.perform { db in var book = db.financeData; var postponed = book.reminders.eventSnoozedUntil ?? [:]; var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: contract.timeZoneID) ?? .current; postponed[event.id] = calendar.date(byAdding: .day, value: 1, to: Date()); book.reminders.eventSnoozedUntil = postponed; db.finances = book } }; Button("Снять отсрочку") { model.perform { db in var book = db.financeData; book.reminders.eventSnoozedUntil?[event.id] = nil; db.finances = book } } }.font(.caption) }
+                        if !event.isFulfilled { Menu("Напоминания") { Button("Отложить на один день") { model.perform { db in var book = db.financeData; var postponed = book.reminders.eventSnoozedUntil ?? [:]; var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: contract.timeZoneID) ?? .current; postponed[event.id] = calendar.date(byAdding: .day, value: 1, to: Date()); book.reminders.eventSnoozedUntil = postponed; db.finances = book } }; Button("Снять отсрочку") { model.perform { db in var book = db.financeData; book.reminders.eventSnoozedUntil?[event.id] = nil; db.finances = book } } }.beeFont(.caption) }
                     }
-                    Text(event.accuracy.title + (event.date < .today && !event.isFulfilled ? " · срок прошёл" : "")).font(.caption).foregroundStyle(event.accuracy == .calculated ? BeeStyle.muted : BeeStyle.warning)
-                    if !event.components.isEmpty { Text(event.components.map { $0.component.title + ": " + BeeFormat.money($0.amount, currency: (try? model.db?.account(contract.accountID).currency) ?? "RUB") }.joined(separator: " · ")).font(.caption) }
-                    ForEach(event.notes, id: \.self) { Text($0).font(.caption).foregroundStyle(BeeStyle.muted) }
+                    Text(event.accuracy.title + (event.date < .today && !event.isFulfilled ? " · срок прошёл" : "")).beeFont(.caption).foregroundStyle(event.accuracy == .calculated ? BeeStyle.muted : BeeStyle.warning)
+                    if !event.components.isEmpty { Text(event.components.map { $0.component.title + ": " + BeeFormat.money($0.amount, currency: (try? model.db?.account(contract.accountID).currency) ?? "RUB") }.joined(separator: " · ")).beeFont(.caption) }
+                    ForEach(event.notes, id: \.self) { Text($0).beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                 }; Divider()
             }
             if events.isEmpty { Text("Нет событий. Заполните условия договора или ручной график.").foregroundStyle(BeeStyle.muted) }
@@ -385,6 +397,7 @@ struct FinanceEventList: View {
     }
 }
 struct FinancialCalendarView: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @State private var includeFulfilled = false
     @State private var payment: FinanceCalendarSelection?
@@ -416,32 +429,33 @@ struct FinancialCalendarView: View {
         let rows = ordered
         ScrollView { LazyVStack(alignment: .leading, spacing: 18) {
             SectionHeading(title: "Финансовый календарь") { Button("Запланировать расход") { model.sheet = SheetRoute(kind: .scheduledPayment) }; Toggle("Исполненные", isOn: $includeFulfilled).toggleStyle(.checkbox); Button("Пересчитать") { model.refreshFinancialForecasts() }; if model.financialBusy { ProgressView().controlSize(.small); Button("Отмена") { model.cancelFinancialForecasts() } } }
-            Picker("События", selection: $scope) { Text("Все").tag(0); Text("Финансовые счета").tag(1); Text("Запланированные расходы").tag(2) }.pickerStyle(.segmented).environment(\.colorScheme, .dark)
-            Text("Планируемые суммы не входят в фактические доходы, расходы и остатки. Минимальный платёж и погашение для льготы могут относиться к одному долгу.").font(.caption).foregroundStyle(BeeStyle.backgroundMuted)
+            BeePicker("События", selection: $scope) { Text("Все").tag(0); Text("Финансовые счета").tag(1); Text("Запланированные расходы").tag(2) }.beePickerStyle(.segmented)
+            Text("Планируемые суммы не входят в фактические доходы, расходы и остатки. Минимальный платёж и погашение для льготы могут относиться к одному долгу.").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted)
             DisclosureGroup("Фильтры календаря") {
                 VStack(alignment: .leading, spacing: 12) {
-                    TextField("Название, комментарий или договор", text: $search).textFieldStyle(.roundedBorder)
-                    Picker("Счёт", selection: $accountFilter) { Text("Все счета").tag(nil as UUID?); ForEach(model.db?.accounts ?? []) { Text($0.name).tag(Optional($0.id)) } }
-                    Picker("Тип", selection: $typeFilter) { Text("Все типы").tag(nil as AccountKind?); ForEach(AccountKind.allCases.filter { $0 != .ordinary }, id: \.self) { Text($0.title).tag(Optional($0)) } }
-                    Picker("Банк", selection: $bankFilter) { Text("Все банки").tag(nil as String?); ForEach(Array(Set(model.db?.accounts.compactMap(\.bankID) ?? [])).sorted(), id: \.self) { Text(model.db?.financialBankName($0) ?? $0).tag(Optional($0)) } }
+                    TextField("Название, комментарий или договор", text: $search).textFieldStyle(BeeTextFieldStyle())
+                    BeePicker("Счёт", selection: $accountFilter) { Text("Все счета").tag(nil as UUID?); ForEach(model.db?.accounts ?? []) { Text($0.name).tag(Optional($0.id)) } }
+                    BeePicker("Тип", selection: $typeFilter) { Text("Все типы").tag(nil as AccountKind?); ForEach(AccountKind.allCases.filter { $0 != .ordinary }, id: \.self) { Text($0.title).tag(Optional($0)) } }
+                    BeePicker("Банк", selection: $bankFilter) { Text("Все банки").tag(nil as String?); ForEach(Array(Set(model.db?.accounts.compactMap(\.bankID) ?? [])).sorted(), id: \.self) { Text(model.db?.financialBankName($0) ?? $0).tag(Optional($0)) } }
                     HStack { DayField(title: "С даты · необязательно", value: $from); DayField(title: "По дату · необязательно", value: $through) }
-                    if (!from.isEmpty && (try? Day(from)) == nil) || (!through.isEmpty && (try? Day(through)) == nil) { Text("Введите даты YYYY-MM-DD.").font(.caption).foregroundStyle(BeeStyle.warning) }
+                    if (!from.isEmpty && (try? Day(from)) == nil) || (!through.isEmpty && (try? Day(through)) == nil) { Text("Введите даты YYYY-MM-DD.").beeFont(.caption).foregroundStyle(BeeStyle.warning) }
                     Button("Сбросить фильтры") { accountFilter = nil; typeFilter = nil; bankFilter = nil; from = ""; through = ""; search = ""; scope = 0 }
                 }.padding(.top, 12)
             }.beeCard()
             ForEach(contracts) { contract in if let error = model.financialErrors[contract.id] { Text(((try? model.db?.account(contract.accountID).name) ?? contract.kind.title) + ": " + error).foregroundStyle(BeeStyle.warning).beeCard() } }
             ScheduledTotals(payments: rows.compactMap(\.scheduled))
             ForEach(rows) { selection in
-                if let contract = selection.contract { VStack(alignment: .leading, spacing: 12) { Button((try? model.db?.account(contract.accountID).name) ?? contract.kind.title) { model.openHistory(contract.accountID) }.font(.title3.bold()).buttonStyle(.plain); FinanceEventList(contract: contract, events: [selection.event], onConfirm: { payment = FinanceCalendarSelection(contract: contract, event: $0) }) }.beeCard() }
+                if let contract = selection.contract { VStack(alignment: .leading, spacing: 12) { Button((try? model.db?.account(contract.accountID).name) ?? contract.kind.title) { model.openHistory(contract.accountID) }.beeFont(.title3.bold()).buttonStyle(BeeRowStyle()); FinanceEventList(contract: contract, events: [selection.event], onConfirm: { payment = FinanceCalendarSelection(contract: contract, event: $0) }) }.beeCard() }
                 else if let p = selection.scheduled { ScheduledPaymentCard(payment: p) }
             }
-            if rows.isEmpty && !model.financialBusy { EmptyState(title: "Нет событий", detail: "Проверьте фильтры и условия договоров.") }
+            if rows.isEmpty && !model.financialBusy { EmptyState(title: "Нет событий", detail: "Проверьте фильтры и условия договоров.").beeCard() }
         }.padding(26) }.sheet(item: $payment) { selection in if let contract = selection.contract { FinancialPaymentEditor(contract: contract, event: selection.event) } }
     }
 }
 private struct FinanceCalendarSelection: Identifiable { var id: String { event.id }; var contract: FinancialContract?; var scheduled: ScheduledPayment?; var event: FinanceEvent }
 
 struct FinancialPaymentEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var contract: FinancialContract; var event: FinanceEvent?
     var editingGroupID: UUID? = nil
@@ -484,12 +498,12 @@ struct FinancialPaymentEditor: View {
     }
     var body: some View {
         EditorFrame(title: depositTax ? "Подтвердить налог" : contract.kind == .deposit ? "Подтвердить проценты" : "Подтвердить платёж", isDirty: !amount.isEmpty, height: 720, save: save) {
-            if let event { Text(event.kind.title + " · " + CalendarDays.label(event.date)).font(.headline) }
+            if let event { Text(event.kind.title + " · " + CalendarDays.label(event.date)).beeFont(.headline) }
             DayField(title: "Дата фактической операции", value: $date)
             if contract.kind.isDebt && contract.cutoffHour != nil { field("Время зачисления HH:mm · " + contract.timeZoneID + " · пусто — неизвестно", $creditedTime) }
             if event != nil && editingGroupID == nil { Toggle("Связать с существующей операцией", isOn: $linkExisting) }
             if linkExisting {
-                Picker("Фактическая операция", selection: $linkID) { Text("Выберите").tag(nil as UUID?); ForEach(linkableOperations) { Text("\($0.date) · " + BeeFormat.money($0.toAmount ?? $0.amount, currency: currency) + " · " + $0.comment).tag(Optional($0.id)) } }
+                BeePicker("Фактическая операция", selection: $linkID) { Text("Выберите").tag(nil as UUID?); ForEach(linkableOperations) { Text("\($0.date) · " + BeeFormat.money($0.toAmount ?? $0.amount, currency: currency) + " · " + $0.comment).tag(Optional($0.id)) } }
                 field("Покрытая сумма · " + currency, $amount)
             } else if depositTax {
                 accountPicker("Счёт оплаты налога", $fromID)
@@ -507,7 +521,7 @@ struct FinancialPaymentEditor: View {
                 Toggle("Проценты и комиссии уже учтены в истории", isOn: $alreadyCharged)
                 if !alreadyCharged { field("Новые проценты · " + currency, $interest); field("Новая комиссия · " + currency, $fee); field("Новый штраф · " + currency, $penalty) }
                 Toggle("Досрочное погашение", isOn: $prepayment)
-                if prepayment && (contract.kind == .mortgage || contract.kind == .termLoan) { FinanceChoice(title: "После досрочного погашения", value: $prepaymentMode, titleOf: { switch $0 { case .reduceTerm: "Уменьшить срок"; case .reducePayment: "Уменьшить платёж"; case .manual: "График банка вручную" } }); Text("Режим сохранится с фактическим платежом. Новый график остаётся прогнозом; комиссию банка укажите в фактических суммах выше.").font(.caption).foregroundStyle(BeeStyle.muted) }
+                if prepayment && (contract.kind == .mortgage || contract.kind == .termLoan) { FinanceChoice(title: "После досрочного погашения", value: $prepaymentMode, titleOf: { switch $0 { case .reduceTerm: "Уменьшить срок"; case .reducePayment: "Уменьшить платёж"; case .manual: "График банка вручную" } }); Text("Режим сохранится с фактическим платежом. Новый график остаётся прогнозом; комиссию банка укажите в фактических суммах выше.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                 Toggle("Распределить вручную", isOn: $manualAllocation)
                 if manualAllocation {
                     if !allocationRows.isEmpty {
@@ -518,14 +532,14 @@ struct FinancialPaymentEditor: View {
                 field("Взнос escrow внутри общей суммы · " + externalCurrency, $escrow)
                 accountPicker("Счёт escrow", $escrowAccountID)
                 if contract.kind == .revolvingCredit {
-                    Text("Распределение по выпискам · необязательно").font(.headline)
-                    Text("Укажите распределение банка. Остаток платежа не будет автоматически приписан другим выпискам.").font(.caption).foregroundStyle(BeeStyle.muted)
+                    Text("Распределение по выпискам · необязательно").beeFont(.headline)
+                    Text("Укажите распределение банка. Остаток платежа не будет автоматически приписан другим выпискам.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
                     ForEach(model.db?.financeData.statements.filter { $0.contractID == contract.id }.sorted { $0.closedOn < $1.closedOn } ?? []) { statement in
                         field("Выписка " + statement.closedOn.rawValue + " · " + currency, Binding(get: { statementAmounts[statement.id] ?? "" }, set: { statementAmounts[statement.id] = $0 }))
                     }
                 }
             }
-            Text("Проверьте фактические суммы по документу банка. Связанные записи сохраняются и удаляются вместе.").font(.caption).foregroundStyle(BeeStyle.muted)
+            Text("Проверьте фактические суммы по документу банка. Связанные записи сохраняются и удаляются вместе.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
         }.onAppear {
             fromID = contract.paymentAccountID; payoutID = contract.terms(on: .today)?.deposit.payoutAccountID
             if depositTax { fromID = contract.terms(on: event?.accrualEnd ?? .today)?.deposit.taxPaymentAccountID }
@@ -563,8 +577,8 @@ struct FinancialPaymentEditor: View {
             }
         }
     }
-    @ViewBuilder private func field(_ title: String, _ value: Binding<String>) -> some View { FormField(title: title) { TextField("0", text: value).textFieldStyle(.roundedBorder) } }
-    @ViewBuilder private func accountPicker(_ title: String, _ value: Binding<UUID?>) -> some View { FormField(title: title) { Picker(title, selection: value) { Text("Не выбран").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name + " · " + $0.currency).tag(Optional($0.id)) } }.labelsHidden() } }
+    @ViewBuilder private func field(_ title: String, _ value: Binding<String>) -> some View { FormField(title: title) { TextField("0", text: value).textFieldStyle(BeeTextFieldStyle()) } }
+    @ViewBuilder private func accountPicker(_ title: String, _ value: Binding<UUID?>) -> some View { FormField(title: title) { BeePicker(title, selection: value) { Text("Не выбран").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name + " · " + $0.currency).tag(Optional($0.id)) } }.labelsHidden() } }
     private func commitPayment(_ mutation: (inout Database) throws -> Void) throws {
         try model.commit { db in if let editingGroupID { try FinancialLedger.replaceGroup(editingGroupID, in: &db, with: mutation) } else { try mutation(&db) } }
     }
@@ -607,6 +621,7 @@ struct FinancialPaymentEditor: View {
     }
 }
 struct CreditStatementEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var contract: FinancialContract
     @State private var start = Day.today.firstOfMonth.rawValue
@@ -621,11 +636,12 @@ struct CreditStatementEditor: View {
             guard errors.isEmpty else { throw BudgetError.invalid(errors.values.joined(separator: "\n")) }
             let statement = CreditStatement(contractID: contract.id, start: try Day(start), closedOn: try Day(closed), dueOn: try Day(due), balance: balance, minimum: minimum, graceAmount: grace)
             try model.commit { db in if let index = db.financeData.statements.firstIndex(where: { $0.contractID == contract.id && $0.closedOn == statement.closedOn }) { db.finances?.statements[index] = statement } else { var book = db.financeData; book.statements.append(statement); db.finances = book } }
-        }) { DayField(title: "Начало цикла", value: $start); DayField(title: "Закрытие выписки", value: $closed); DayField(title: "Оплатить до", value: $due); FinanceMoneyField(title: "Долг выписки", value: $balance, currency: currency, errors: $errors); FinanceMoneyField(title: "Минимальный платёж", value: $minimum, currency: currency, errors: $errors); FinanceMoneyField(title: "Для сохранения льготы", value: $grace, currency: currency, errors: $errors); Text("Выписка уточняет план. Остаток меняют фактические операции.").font(.caption).foregroundStyle(BeeStyle.muted) }
+        }) { DayField(title: "Начало цикла", value: $start); DayField(title: "Закрытие выписки", value: $closed); DayField(title: "Оплатить до", value: $due); FinanceMoneyField(title: "Долг выписки", value: $balance, currency: currency, errors: $errors); FinanceMoneyField(title: "Минимальный платёж", value: $minimum, currency: currency, errors: $errors); FinanceMoneyField(title: "Для сохранения льготы", value: $grace, currency: currency, errors: $errors); Text("Выписка уточняет план. Остаток меняют фактические операции.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
     }
     private var currency: String { (try? model.db?.account(contract.accountID).currency) ?? "RUB" }
 }
 struct ManualFinanceRowEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var contract: FinancialContract
     @State private var date = Day.today.adding(1).rawValue
@@ -638,10 +654,11 @@ struct ManualFinanceRowEditor: View {
             let components = try values.compactMap { key, value -> FinancialAllocation? in let amount = try Money.parse(value, currency: currency); guard amount >= 0 else { throw BudgetError.invalid("Суммы должны быть неотрицательными.") }; return amount == 0 ? nil : FinancialAllocation(key, amount) }
             var row = ManualFinanceRow(date: try Day(date), kind: kind, components: components, amount: components.isEmpty ? nil : try components.reduce(0) { try Money.add($0, $1.amount) }); row.comment = comment
             try model.commit { db in guard var current = db.contract(for: contract.accountID) else { throw BudgetError.corrupt }; current.manualRows.append(row); try FinancialLedger.saveContract(current, in: &db) }
-        }) { DayField(title: "Дата", value: $date); Picker("Событие", selection: $kind) { ForEach(FinanceEventKind.allCases.filter { $0 != .scheduledPayment }, id: \.self) { Text($0.title).tag($0) } }; ForEach([FinancialComponent.principal, .interest, .fee, .penalty, .escrow, .tax], id: \.self) { component in FormField(title: component.title) { TextField("0", text: Binding(get: { values[component] ?? "" }, set: { values[component] = $0 })).textFieldStyle(.roundedBorder) } }; TextField("Комментарий", text: $comment).textFieldStyle(.roundedBorder) }.onAppear { kind = contract.kind == .deposit ? .depositInterest : .loanPayment }
+        }) { DayField(title: "Дата", value: $date); BeePicker("Событие", selection: $kind) { ForEach(FinanceEventKind.allCases.filter { $0 != .scheduledPayment }, id: \.self) { Text($0.title).tag($0) } }; ForEach([FinancialComponent.principal, .interest, .fee, .penalty, .escrow, .tax], id: \.self) { component in FormField(title: component.title) { TextField("0", text: Binding(get: { values[component] ?? "" }, set: { values[component] = $0 })).textFieldStyle(BeeTextFieldStyle()) } }; TextField("Комментарий", text: $comment).textFieldStyle(BeeTextFieldStyle()) }.onAppear { kind = contract.kind == .deposit ? .depositInterest : .loanPayment }
     }
 }
 struct CreditIssueEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var contract: FinancialContract
     @State private var destination: UUID?
@@ -653,10 +670,11 @@ struct CreditIssueEditor: View {
             guard let destination, let source = try model.db?.account(contract.accountID), let target = try model.db?.account(destination) else { throw BudgetError.invalid("Выберите счёт получения.") }
             let amount = try Money.parse(amount, currency: source.currency), received = self.received.isEmpty ? nil : try Money.parse(self.received, currency: target.currency)
             try model.commit { try FinancialLedger.issueCredit(contractID: contract.id, to: destination, amount: amount, receivedAmount: received, date: Day(date), in: &$0) }
-        }) { DayField(title: "Дата", value: $date); TextField("Сумма в валюте кредита", text: $amount).textFieldStyle(.roundedBorder); Picker("Счёт получения", selection: $destination) { Text("Выберите").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name + " · " + $0.currency).tag(Optional($0.id)) } }; TextField("Фактически получено (для другой валюты)", text: $received).textFieldStyle(.roundedBorder); Text("Получение кредита учитывается переводом и не увеличивает доход.").font(.caption).foregroundStyle(BeeStyle.muted) }
+        }) { DayField(title: "Дата", value: $date); TextField("Сумма в валюте кредита", text: $amount).textFieldStyle(BeeTextFieldStyle()); BeePicker("Счёт получения", selection: $destination) { Text("Выберите").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name + " · " + $0.currency).tag(Optional($0.id)) } }; TextField("Фактически получено (для другой валюты)", text: $received).textFieldStyle(BeeTextFieldStyle()); Text("Получение кредита учитывается переводом и не увеличивает доход.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
     }
 }
 struct FinancialScenarioView: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     var contract: FinancialContract
@@ -669,15 +687,15 @@ struct FinancialScenarioView: View {
     @State private var busy = false
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack { Text("Сценарий").font(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() } }
+            HStack { Text("Сценарий").beeFont(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() } }
             DayField(title: "Дата досрочного погашения", value: $date)
             if contract.kind == .revolvingCredit { DayField(title: "Планируемая полная оплата", value: $paymentDate) }
-            else { TextField("Сумма досрочного погашения", text: $amount).textFieldStyle(.roundedBorder) }
+            else { TextField("Сумма досрочного погашения", text: $amount).textFieldStyle(BeeTextFieldStyle()) }
             Button("Рассчитать", action: calculate).disabled(busy)
             if busy { ProgressView() }; if !error.isEmpty { Text(error).foregroundStyle(BeeStyle.warning) }
-            if let cost = creditCost { FinanceValue(title: "Дополнительные проценты", amount: cost.interest, currency: currency); FinanceValue(title: "Комиссии", amount: cost.fees, currency: currency); Text(cost.accuracy.title).font(.caption); ForEach(cost.notes, id: \.self) { Text($0).font(.caption) } }
-            ForEach(results.indices, id: \.self) { index in VStack(alignment: .leading, spacing: 8) { Text(index == 0 ? "Уменьшить срок" : "Уменьшить платёж").font(.headline); FinanceValue(title: "Оставшиеся проценты", amount: results[index].remainingInterest, currency: currency); FinanceValue(title: "Комиссия досрочного погашения", amount: results[index].fee, currency: currency); Text("Окончание: " + (results[index].end?.rawValue ?? "Неизвестно") + " · " + results[index].accuracy.title).font(.caption) }.beeCard() }
-            Text("Сценарий не меняет историю и не подтверждает будущие операции.").font(.caption).foregroundStyle(BeeStyle.muted)
+            if let cost = creditCost { FinanceValue(title: "Дополнительные проценты", amount: cost.interest, currency: currency); FinanceValue(title: "Комиссии", amount: cost.fees, currency: currency); Text(cost.accuracy.title).beeFont(.caption); ForEach(cost.notes, id: \.self) { Text($0).beeFont(.caption) } }
+            ForEach(results.indices, id: \.self) { index in VStack(alignment: .leading, spacing: 8) { Text(index == 0 ? "Уменьшить срок" : "Уменьшить платёж").beeFont(.headline); FinanceValue(title: "Оставшиеся проценты", amount: results[index].remainingInterest, currency: currency); FinanceValue(title: "Комиссия досрочного погашения", amount: results[index].fee, currency: currency); Text("Окончание: " + (results[index].end?.rawValue ?? "Неизвестно") + " · " + results[index].accuracy.title).beeFont(.caption) }.beeCard() }
+            Text("Сценарий не меняет историю и не подтверждает будущие операции.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
         }.padding(24).frame(width: 620)
     }
     private var currency: String { (try? model.db?.account(contract.accountID).currency) ?? "RUB" }
@@ -690,21 +708,22 @@ struct FinancialScenarioView: View {
 }
 
 struct FinancialDashboardSummary: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var body: some View {
         if let db = model.db, !db.financeData.contracts.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                HStack { Text("Финансовые счета").font(.headline); Spacer(); Button("Календарь") { model.section = .financialCalendar } }
+                HStack { Text("Финансовые счета").beeFont(.headline); Spacer(); Button("Календарь") { model.section = .financialCalendar } }
                 let events = model.financialEvents.values.flatMap { $0 }.filter { !$0.isFulfilled && $0.kind != .scheduledPayment }.sorted { $0.date < $1.date }
                 let debtRows = debt(db)
-                if let total = try? Reports.total(debtRows) { Text("Задолженность: " + BeeFormat.valuation(total, currency: db.settings.reportCurrency)).font(.title3).monospacedDigit() }
+                if let total = try? Reports.total(debtRows) { Text("Задолженность: " + BeeFormat.valuation(total, currency: db.settings.reportCurrency)).beeFont(.title3).monospacedDigit() }
                 ForEach(Array(events.prefix(3))) { event in
                     if let contract = db.financeData.contracts.first(where: { $0.id == event.contractID }), let account = try? db.account(contract.accountID) {
-                        Button { model.openHistory(account.id) } label: { HStack { Text(CalendarDays.label(event.date)); Text(account.name + " · " + event.kind.title).lineLimit(1); Spacer(); Text(event.remaining.map { BeeFormat.money($0, currency: account.currency) } ?? "Уточните сумму") } }.buttonStyle(.plain)
+                        Button { model.openHistory(account.id) } label: { HStack { Text(CalendarDays.label(event.date)); Text(account.name + " · " + event.kind.title).lineLimit(1); Spacer(); Text(event.remaining.map { BeeFormat.money($0, currency: account.currency) } ?? "Уточните сумму") } }.buttonStyle(BeeRowStyle())
                     }
                 }
                 if model.financialBusy { ProgressView("Пересчёт графиков…").controlSize(.small) }
-                Text("Долг включает архивные счета. Предстоящие суммы показаны отдельно от фактических расходов.").font(.caption).foregroundStyle(BeeStyle.muted)
+                Text("Долг включает архивные счета. Предстоящие суммы показаны отдельно от фактических расходов.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             }.beeCard()
         }
     }
@@ -712,6 +731,7 @@ struct FinancialDashboardSummary: View {
 }
 
 struct FinancialGroupEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var model: AppModel
     var groupID: UUID?
@@ -722,6 +742,7 @@ struct FinancialGroupEditor: View {
     }
 }
 struct DepositRenewalEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var contract: FinancialContract
     @State private var start = ""
@@ -730,12 +751,13 @@ struct DepositRenewalEditor: View {
     var body: some View {
         EditorFrame(title: "Подтвердить продление", isDirty: true, height: 420, save: { try model.commit { try FinancialLedger.renewDeposit(contract.id, start: Day(start), end: Day(end), annualPercent: rate.isEmpty ? nil : rate.replacingOccurrences(of: ",", with: "."), in: &$0) } }) {
             DayField(title: "Начало нового срока", value: $start); DayField(title: "Окончание нового срока", value: $end)
-            TextField("Новая ставка, % (пусто — неизвестна)", text: $rate).textFieldStyle(.roundedBorder)
-            Text("Предыдущий срок и его условия сохранятся. Неподтверждённые проценты не добавляются к остатку автоматически.").font(.caption).foregroundStyle(BeeStyle.muted)
+            TextField("Новая ставка, % (пусто — неизвестна)", text: $rate).textFieldStyle(BeeTextFieldStyle())
+            Text("Предыдущий срок и его условия сохранятся. Неподтверждённые проценты не добавляются к остатку автоматически.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
         }.onAppear { start = contract.end?.rawValue ?? ""; end = contract.end?.adding(365).rawValue ?? ""; rate = contract.terms(on: contract.end ?? .today)?.deposit.renewalAnnualPercent ?? "" }
     }
 }
 struct DepositExitEditor: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var contract: FinancialContract
     @State private var date = Day.today.rawValue
@@ -757,13 +779,13 @@ struct DepositExitEditor: View {
         }) {
             DayField(title: "Дата возврата", value: $date)
             Button("Рассчитать досрочный вариант") { do { guard let db = model.db else { return }; result = try FinancialEngine.depositExit(contract: contract, db: db, exitOn: Day(date)); if let amount = result?.interestAdjustment { adjustment = Money.string(amount, currency: currency) }; fee = Money.string(result?.fee ?? 0, currency: currency); error = "" } catch { self.error = error.localizedDescription } }
-            if let result { FinanceValue(title: "Уже выплачено процентов", amount: result.previouslyPaidInterest, currency: currency); FinanceValue(title: "Пересчитанные проценты", amount: result.recomputedInterest, currency: currency); FinanceValue(title: "Возврат до нового налога", amount: result.returnBeforeNewTax, currency: currency); Text(result.accuracy.title).font(.caption); ForEach(result.notes, id: \.self) { Text($0).font(.caption).foregroundStyle(BeeStyle.muted) } }
+            if let result { FinanceValue(title: "Уже выплачено процентов", amount: result.previouslyPaidInterest, currency: currency); FinanceValue(title: "Пересчитанные проценты", amount: result.recomputedInterest, currency: currency); FinanceValue(title: "Возврат до нового налога", amount: result.returnBeforeNewTax, currency: currency); Text(result.accuracy.title).beeFont(.caption); ForEach(result.notes, id: \.self) { Text($0).beeFont(.caption).foregroundStyle(BeeStyle.muted) } }
             if !error.isEmpty { Text(error).foregroundStyle(BeeStyle.warning) }
-            TextField("Разница процентов банка, + / −", text: $adjustment).textFieldStyle(.roundedBorder)
-            TextField("Комиссия закрытия", text: $fee).textFieldStyle(.roundedBorder)
-            TextField("Новый налог (ранее удержанный не повторять)", text: $tax).textFieldStyle(.roundedBorder)
-            Picker("Вернуть на счёт", selection: $destination) { Text("Выберите").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name + " · " + $0.currency).tag(Optional($0.id)) } }
-            TextField("Фактически получено в другой валюте", text: $received).textFieldStyle(.roundedBorder)
+            TextField("Разница процентов банка, + / −", text: $adjustment).textFieldStyle(BeeTextFieldStyle())
+            TextField("Комиссия закрытия", text: $fee).textFieldStyle(BeeTextFieldStyle())
+            TextField("Новый налог (ранее удержанный не повторять)", text: $tax).textFieldStyle(BeeTextFieldStyle())
+            BeePicker("Вернуть на счёт", selection: $destination) { Text("Выберите").tag(nil as UUID?); ForEach(model.db?.accounts.filter { !$0.archived && $0.id != contract.accountID } ?? []) { Text($0.name + " · " + $0.currency).tag(Optional($0.id)) } }
+            TextField("Фактически получено в другой валюте", text: $received).textFieldStyle(BeeTextFieldStyle())
             Toggle("Сверено с документом банка; закрыть договор", isOn: $confirmed)
         }
     }

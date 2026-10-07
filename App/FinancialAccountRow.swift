@@ -11,6 +11,7 @@ enum FinancialAccountSection: String, CaseIterable, Identifiable {
 }
 
 struct FinancialAccountRow: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var account: Account
     var db: Database
@@ -19,14 +20,14 @@ struct FinancialAccountRow: View {
         HStack(alignment: .top, spacing: 14) {
             BankMark(bankID: account.bankID, fallback: account.archived ? "archivebox" : account.kind.icon).frame(width: 34).padding(.top, 3)
             VStack(alignment: .leading, spacing: 6) {
-                Button(account.name) { model.openHistory(account.id) }.buttonStyle(.plain).font(.headline)
-                Text(account.kind.title + " · " + account.currency + (account.archived ? " · архив" : "")).font(.caption).foregroundStyle(BeeStyle.muted)
-                if let bank = db.financialBankName(account.bankID) { Text(bank).font(.caption).foregroundStyle(BeeStyle.muted) }
-                ForEach(summary, id: \.self) { Text($0).font(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true) }
+                Button(account.name) { model.openHistory(account.id) }.buttonStyle(BeeRowStyle()).beeFont(.headline)
+                Text(account.kind.title + " · " + account.currency + (account.archived ? " · архив" : "")).beeFont(.caption).foregroundStyle(BeeStyle.muted)
+                if let bank = db.financialBankName(account.bankID) { Text(bank).beeFont(.caption).foregroundStyle(BeeStyle.muted) }
+                ForEach(summary, id: \.self) { Text($0).beeFont(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true) }
             }
             Spacer(minLength: 12)
             VStack(alignment: .trailing, spacing: 8) {
-                Text((account.kind.isDebt && balance < 0 ? "Долг: " : "") + BeeFormat.money(account.kind.isDebt && balance < 0 ? -balance : balance, currency: account.currency)).font(.title3).monospacedDigit().foregroundStyle(balance < 0 ? BeeStyle.negative : BeeStyle.text)
+                Text((account.kind.isDebt && balance < 0 ? "Долг: " : "") + BeeFormat.money(account.kind.isDebt && balance < 0 ? -balance : balance, currency: account.currency)).beeFont(.title3).monospacedDigit().foregroundStyle(balance < 0 ? BeeStyle.negative : BeeStyle.text)
                 Button("История", systemImage: "chevron.right") { model.openHistory(account.id) }
             }
             Menu {
@@ -36,7 +37,7 @@ struct FinancialAccountRow: View {
                     if account.archived || confirmDeletion(account.name, consequence: "История и остаток сохранятся. Новые операции будут недоступны.") { model.perform { db in var copy = account; copy.archived.toggle(); try Ledger.saveAccount(copy, in: &db) } }
                 }
                 Button("Удалить", role: .destructive) { if confirmDeletion(account.name, consequence: "Удаляется пустой счёт без ссылок. Для счёта с историей используйте архив.") { model.perform { try Ledger.deleteAccount(account.id, in: &$0) } } }
-            } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 22)
+            } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 28)
         }.padding(.vertical, 14).tint(BeeStyle.text)
     }
     private var summary: [String] {

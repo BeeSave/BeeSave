@@ -52,7 +52,7 @@ text = text.replace('  A00000000000000000000010 =', '''  B0000000000000000000000
   B00000000000000000000004 = {isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; alwaysOutOfDate = 1; files = (); inputPaths = (); name = "Build and sign Sparkle"; outputPaths = ("$(SRCROOT)/build/Sparkle/Sparkle.framework/Versions/B/Sparkle","$(SRCROOT)/build/Sparkle/Sparkle.framework/Versions/B/Modules/module.modulemap"); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "python3 \\\"$SRCROOT/scripts/build_sparkle.py\\\"";};
   B00000000000000000000005 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 10; files = (B00000000000000000000003); name = "Embed Frameworks"; runOnlyForDeploymentPostprocessing = 0;};
   A00000000000000000000010 =''')
-text = text.replace('CURRENT_PROJECT_VERSION = 5;', 'CURRENT_PROJECT_VERSION = 12;').replace('MARKETING_VERSION = 1.1.0;', 'MARKETING_VERSION = 1.3.1;')
+text = text.replace('CURRENT_PROJECT_VERSION = 5;', 'CURRENT_PROJECT_VERSION = 13;').replace('MARKETING_VERSION = 1.1.0;', 'MARKETING_VERSION = 1.4.0;')
 text = text.replace('membershipExceptions = (BeeSave.entitlements)', 'membershipExceptions = (BeeSave.entitlements,Info.plist)')
 updater_settings = 'INFOPLIST_FILE = App/Info.plist; ENABLE_USER_SCRIPT_SANDBOXING = NO; FRAMEWORK_SEARCH_PATHS = ("$(inherited)","$(SRCROOT)/build/Sparkle"); '
 text = text.replace('CODE_SIGN_STYLE = Automatic;', updater_settings + 'CODE_SIGN_STYLE = Automatic;')

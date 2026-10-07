@@ -10,7 +10,7 @@ enum SectionID: String, CaseIterable, Identifiable {
     var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .references: "books.vertical"; case .financialCalendar: "calendar" } }
 }
 enum SettingsTask: String, CaseIterable, Identifiable {
-    case general = "Общие", access = "Вход и защита", rates = "Валюты и курсы", backups = "Резервные копии", transfer = "Импорт и экспорт", reminders = "Напоминания"
+    case general = "Общие", appearance = "Внешний вид", access = "Вход и защита", rates = "Валюты и курсы", backups = "Резервные копии", transfer = "Импорт и экспорт", reminders = "Напоминания"
     var id: String { rawValue }
 }
 struct SheetRoute: Identifiable {

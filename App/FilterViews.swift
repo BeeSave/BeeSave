@@ -7,6 +7,7 @@ extension Participation {
 }
 
 struct FilterBar: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @Binding var filters: Filters
     var showParticipation = true
@@ -24,7 +25,7 @@ struct FilterBar: View {
             HStack(spacing: 10) {
                 Button { filtersOpen = false; calendarOpen = true } label: { Label(CalendarDays.range(filters), systemImage: "calendar"); Image(systemName: "chevron.down") }
                     .popover(isPresented: $calendarOpen) { DateRangePopover(filters: $filters, narrow: narrow, close: { calendarOpen = false }) }
-                Button { calendarOpen = false; filtersOpen = true } label: { Label("Фильтры", systemImage: "slider.horizontal.3"); let count = FilterDraft(countFilters).activeCount; if count > 0 { Text("\(count)").font(.caption.bold()) } }
+                Button { calendarOpen = false; filtersOpen = true } label: { Label("Фильтры", systemImage: "slider.horizontal.3"); let count = FilterDraft(countFilters).activeCount; if count > 0 { Text("\(count)").beeFont(.caption.bold()) } }
                     .popover(isPresented: $filtersOpen) { FilterPanel(filters: $filters, showParticipation: showParticipation, allowCategoryProject: allowCategoryProject, kind: kind, kinds: kinds, fixedAccount: fixedAccount, operationIDs: operationIDs, resetPeriod: resetPeriod, narrow: narrow, close: { filtersOpen = false }) }
                 Spacer()
             }
@@ -42,11 +43,12 @@ struct FilterBar: View {
     }
     private var countFilters: Filters { var value = filters; if fixedAccount != nil { value.accounts = [] }; return value }
     private func chip(_ title: String, remove: @escaping () -> Void) -> some View {
-        Button(action: remove) { HStack(spacing: 5) { Text(title).lineLimit(1); Image(systemName: "xmark").font(.caption2) } }.buttonStyle(.plain).font(.caption).padding(.horizontal, 8).padding(.vertical, 5).background(BeeStyle.selected, in: Capsule()).foregroundStyle(BeeStyle.text).accessibilityLabel("Убрать фильтр: " + title)
+        Button(action: remove) { HStack(spacing: 5) { Text(title).lineLimit(1); Image(systemName: "xmark").beeFont(.caption2) } }.buttonStyle(BeeRowStyle()).beeFont(.caption).padding(.horizontal, 8).padding(.vertical, 5).background(BeeStyle.selected, in: Capsule()).foregroundStyle(BeeStyle.text).accessibilityLabel("Убрать фильтр: " + title)
     }
 }
 
 struct DateRangePopover: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @Binding var filters: Filters
     var narrow = false
     var close: () -> Void
@@ -56,43 +58,45 @@ struct DateRangePopover: View {
     @FocusState private var dayFocus: Day?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack { Text("Период").font(.title3.bold()); Spacer(); Text(draft.choosingEnd ? "Выберите последний день" : "Выберите первый день").font(.caption).foregroundStyle(BeeStyle.muted) }
+            HStack { Text("Период").beeFont(.title3.bold()); Spacer(); Text(draft.choosingEnd ? "Выберите последний день" : "Выберите первый день").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
             WrappingLayout(spacing: 8) { ForEach(PeriodPreset.allCases, id: \.self) { preset in Button(preset.title) { draft.preset(preset, today: .today); month = (draft.start ?? .today).firstOfMonth; error = "" } } }
             HStack { Button { month = CalendarDays.month(month, offset: -1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Предыдущий месяц"); Spacer(); Button("Сегодня") { month = Day.today.firstOfMonth }; Spacer(); Button { month = CalendarDays.month(month, offset: 1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Следующий месяц") }
             HStack(alignment: .top, spacing: 20) { MonthCalendar(month: month, draft: $draft, focused: $dayFocus, navigate: navigate); if !narrow { MonthCalendar(month: CalendarDays.month(month, offset: 1), draft: $draft, focused: $dayFocus, navigate: navigate) } }
             if draft.start != nil || draft.end != nil { HStack(spacing: 18) { boundary("С", day: $draft.start); boundary("По", day: $draft.end) } }
-            if !error.isEmpty { Text(error).font(.caption).foregroundStyle(BeeStyle.negative) }
+            if !error.isEmpty { Text(error).beeFont(.caption).foregroundStyle(BeeStyle.negative) }
             Divider()
-            Text(draft.start == nil && draft.end == nil ? "Без ограничения дат" : "Границы включены в период").font(.caption).foregroundStyle(BeeStyle.muted)
+            Text(draft.start == nil && draft.end == nil ? "Без ограничения дат" : "Границы включены в период").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             HStack { Spacer(); Button("Отмена", action: close).keyboardShortcut(.cancelAction); Button("Применить") { do { filters = try draft.apply(to: filters); close() } catch { self.error = error.localizedDescription } }.buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(draft.choosingEnd) }
 
         }.padding(20).frame(width: narrow ? 350 : 620).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).onAppear { draft = DateRangeDraft(start: filters.start, end: filters.end); month = (filters.start ?? .today).firstOfMonth }
     }
     private func navigate(_ day: Day) { if day < month { month = day.firstOfMonth }; if day >= CalendarDays.month(month, offset: narrow ? 1 : 2) { month = day.firstOfMonth }; dayFocus = day }
     private func boundary(_ title: String, day: Binding<Day?>) -> some View {
-        FormField(title: title) { DatePicker(title, selection: Binding(get: { CalendarDays.localDate(day.wrappedValue ?? draft.start ?? .today) }, set: { day.wrappedValue = CalendarDays.day($0); draft = DateRangeDraft(start: draft.start, end: draft.end) }), displayedComponents: .date).labelsHidden().datePickerStyle(.field).environment(\.locale, Locale(identifier: "ru_RU")) }
+        FormField(title: title) { BeeDatePicker(title, selection: Binding(get: { CalendarDays.localDate(day.wrappedValue ?? draft.start ?? .today) }, set: { day.wrappedValue = CalendarDays.day($0); draft = DateRangeDraft(start: draft.start, end: draft.end) }), displayedComponents: .date).labelsHidden().datePickerStyle(.field).environment(\.locale, Locale(identifier: "ru_RU")) }
     }
 }
 
 struct MonthCalendar: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
+    @Environment(\.beeAppearance) private var appearance
     var month: Day
     @Binding var draft: DateRangeDraft
     var focused: FocusState<Day?>.Binding
     var navigate: (Day) -> Void
     var body: some View {
         VStack(spacing: 10) {
-            Text(monthTitle).font(.headline).frame(maxWidth: .infinity)
+            Text(monthTitle).beeFont(.headline).frame(maxWidth: .infinity)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 2) {
-                ForEach(["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"], id: \.self) { Text($0).font(.caption).foregroundStyle(BeeStyle.muted).frame(height: 22) }
+                ForEach(["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"], id: \.self) { Text($0).beeFont(.caption).foregroundStyle(BeeStyle.muted).frame(minHeight: 22 * appearance.scale) }
                 ForEach(Array(CalendarDays.cells(month).enumerated()), id: \.offset) { _, day in
                     if let day { Button { draft.select(day); focused.wrappedValue = day } label: {
-                        Text(String(Day.calendar.component(.day, from: day.date))).font(.subheadline.weight(day == draft.start || day == draft.end ? .bold : .regular)).frame(maxWidth: .infinity).frame(height: 28)
+                        Text(String(Day.calendar.component(.day, from: day.date))).beeFont(.subheadline.weight(day == draft.start || day == draft.end ? .bold : .regular)).frame(maxWidth: .infinity).frame(minHeight: 28 * appearance.scale)
                             .foregroundStyle(day == draft.start || day == draft.end ? BeeStyle.honeyText : BeeStyle.text)
                             .background(day == draft.start || day == draft.end ? BeeStyle.honey : inRange(day) ? BeeStyle.selected : .clear, in: RoundedRectangle(cornerRadius: 6))
                             .overlay { if day == .today { RoundedRectangle(cornerRadius: 6).stroke(BeeStyle.line, lineWidth: 1) } }
-                    }.buttonStyle(.plain).focused(focused, equals: day).accessibilityLabel(CalendarDays.label(day, full: true)).accessibilityValue(day == draft.start && day == draft.end ? "Начало и конец периода" : day == draft.start ? "Начало периода" : day == draft.end ? "Конец периода" : inRange(day) ? "В выбранном периоде" : "")
+                    }.buttonStyle(BeeRowStyle()).focused(focused, equals: day).accessibilityLabel(CalendarDays.label(day, full: true)).accessibilityValue(day == draft.start && day == draft.end ? "Начало и конец периода" : day == draft.start ? "Начало периода" : day == draft.end ? "Конец периода" : inRange(day) ? "В выбранном периоде" : "")
                         .onKeyPress(.leftArrow) { move(day, by: -1); return .handled }.onKeyPress(.rightArrow) { move(day, by: 1); return .handled }.onKeyPress(.upArrow) { move(day, by: -7); return .handled }.onKeyPress(.downArrow) { move(day, by: 7); return .handled }
-                    } else { Color.clear.frame(height: 28) }
+                    } else { Color.clear.frame(minHeight: 28 * appearance.scale) }
                 }
             }
         }.frame(maxWidth: .infinity)
@@ -103,6 +107,7 @@ struct MonthCalendar: View {
 }
 
 struct FilterPanel: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @Binding var filters: Filters
     var showParticipation: Bool
@@ -123,34 +128,34 @@ struct FilterPanel: View {
     @State private var countTask: Task<Void, Never>?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack { Text("Фильтры").font(.title3.bold()); Spacer(); Text("Изменения применятся после подтверждения").font(.caption).foregroundStyle(BeeStyle.muted) }
+            HStack { Text("Фильтры").beeFont(.title3.bold()); Spacer(); Text("Изменения применятся после подтверждения").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
             if let db = model.db { ScrollView { let layout = narrow ? AnyLayout(VStackLayout(alignment: .leading, spacing: 22)) : AnyLayout(HStackLayout(alignment: .top, spacing: 22)); layout {
                 VStack(alignment: .leading, spacing: 9) {
-                    Text("Счета").font(.headline)
-                    if let account = db.accounts.first(where: { $0.id == fixedAccount }) { Label(account.name, systemImage: "lock").font(.subheadline); Text("Счёт истории закреплён").font(.caption).foregroundStyle(BeeStyle.muted) }
+                    Text("Счета").beeFont(.headline)
+                    if let account = db.accounts.first(where: { $0.id == fixedAccount }) { Label(account.name, systemImage: "lock").beeFont(.subheadline); Text("Счёт истории закреплён").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                     else {
-                        TextField("Найти счёт", text: $accountSearch).textFieldStyle(.roundedBorder)
+                        TextField("Найти счёт", text: $accountSearch).textFieldStyle(BeeTextFieldStyle())
                         ScrollView { LazyVStack(alignment: .leading, spacing: 8) { ForEach(db.accounts.filter { accountSearch.isEmpty || $0.name.localizedCaseInsensitiveContains(accountSearch) }) { a in Toggle(a.name + (a.archived ? " · архив" : ""), isOn: membership(a.id, set: $draft.value.accounts)).toggleStyle(.checkbox) } } }.frame(height: 170)
-                        Text("Без выбора — все счета").font(.caption).foregroundStyle(BeeStyle.muted)
+                        Text("Без выбора — все счета").beeFont(.caption).foregroundStyle(BeeStyle.muted)
                     }
-                    if showParticipation { FormField(title: "Участие в бюджетах") { Picker("Участие в бюджетах", selection: $draft.value.participation) { ForEach(Participation.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden() } }
+                    if showParticipation { FormField(title: "Участие в бюджетах") { BeePicker("Участие в бюджетах", selection: $draft.value.participation) { ForEach(Participation.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden() } }
                     Toggle("Включать архивные счета", isOn: $draft.value.includeArchived).toggleStyle(.checkbox)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 9) {
                     if allowCategoryProject {
-                        Text("Категории").font(.headline)
-                        TextField("Найти категорию", text: $categorySearch).textFieldStyle(.roundedBorder)
+                        Text("Категории").beeFont(.headline)
+                        TextField("Найти категорию", text: $categorySearch).textFieldStyle(BeeTextFieldStyle())
                         ScrollView { LazyVStack(alignment: .leading, spacing: 8) { ForEach(db.categories.filter { (kind == nil || $0.kind == kind) && (categorySearch.isEmpty || db.categoryPath($0.id).localizedCaseInsensitiveContains(categorySearch)) }.sorted { db.categoryPath($0.id) < db.categoryPath($1.id) }) { c in
                             Toggle(db.categoryPath(c.id) + (kind == nil ? " · " + (c.kind == .expense ? "расходы" : "доходы") : "") + (c.archived ? " · архив" : ""), isOn: membership(c.id, set: $draft.value.categories)).toggleStyle(.checkbox).padding(.leading, c.parentID == nil ? 0 : 14)
                         } } }.frame(height: 170)
-                        FormField(title: "Проект") { Picker("Проект", selection: $draft.value.projectID) { Text("Все проекты").tag(nil as UUID?); ForEach(db.projects) { Text($0.name + ($0.archived ? " · архив" : "")).tag(Optional($0.id)) } }.labelsHidden() }
+                        FormField(title: "Проект") { BeePicker("Проект", selection: $draft.value.projectID) { Text("Все проекты").tag(nil as UUID?); ForEach(db.projects) { Text($0.name + ($0.archived ? " · архив" : "")).tag(Optional($0.id)) } }.labelsHidden() }
                     }
-                    FormField(title: "Исходная валюта операции") { Picker("Исходная валюта", selection: $draft.value.currency) { Text("Все валюты").tag(nil as String?); ForEach(Array(Set(db.accounts.map(\.currency))).sorted(), id: \.self) { Text($0).tag(Optional($0)) } }.labelsHidden() }
+                    FormField(title: "Исходная валюта операции") { BeePicker("Исходная валюта", selection: $draft.value.currency) { Text("Все валюты").tag(nil as String?); ForEach(Array(Set(db.accounts.map(\.currency))).sorted(), id: \.self) { Text($0).tag(Optional($0)) } }.labelsHidden() }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             } }.frame(maxHeight: narrow ? 360 : 390) }
-            if !error.isEmpty { Text(error).font(.caption).foregroundStyle(BeeStyle.negative) }
+            if !error.isEmpty { Text(error).beeFont(.caption).foregroundStyle(BeeStyle.negative) }
             Divider()
-            HStack { Text(count.map { "Найдено \(allowCategoryProject ? "записей" : "счетов"): \($0)" } ?? "Проверяем выборку…").font(.caption).foregroundStyle(BeeStyle.muted); Spacer(); Button("Сбросить") { draft.reset(today: .today, fixedAccount: fixedAccount, period: resetPeriod) } }
+            HStack { Text(count.map { "Найдено \(allowCategoryProject ? "записей" : "счетов"): \($0)" } ?? "Проверяем выборку…").beeFont(.caption).foregroundStyle(BeeStyle.muted); Spacer(); Button("Сбросить") { draft.reset(today: .today, fixedAccount: fixedAccount, period: resetPeriod) } }
             HStack { Spacer(); Button("Отмена", action: close).keyboardShortcut(.cancelAction); Button("Применить") { do { guard let db = model.db else { return }; filters = try draft.apply(database: db, fixedAccount: fixedAccount); close() } catch { self.error = error.localizedDescription } }.buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction) }
 
         }.padding(20).frame(width: narrow ? 390 : 650).foregroundStyle(BeeStyle.text).background(BeeStyle.surface)

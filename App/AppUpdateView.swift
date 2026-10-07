@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import BudgetCore
+import BudgetPresentation
 
 struct AppUpdateCommands: Commands {
     @ObservedObject var updater: InstallUpdateManager
@@ -14,11 +15,13 @@ struct AppUpdateCommands: Commands {
 }
 
 struct AppUpdateView: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
+    @Environment(\.beeAppearance) private var appearance
     @ObservedObject var updater: InstallUpdateManager
     @State private var keepCurrent = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Label("Обновление BeeSave", systemImage: "arrow.down.circle").font(.title2.bold())
+        ScrollView { VStack(alignment: .leading, spacing: 18) {
+            Label("Обновление BeeSave", systemImage: "arrow.down.circle").beeFont(.title2.bold())
             Text("Установлена версия \(updater.version), сборка \(updater.build)").foregroundStyle(BeeStyle.muted)
             Group {
                 switch updater.state {
@@ -60,7 +63,7 @@ struct AppUpdateView: View {
             }
             Spacer(minLength: 0)
             Divider()
-            Text("Проверка выполняется по вашей команде. Финансовые данные в GitHub не передаются.").font(.caption).foregroundStyle(BeeStyle.muted)
+            Text("Проверка выполняется по вашей команде. Финансовые данные в GitHub не передаются.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             HStack {
                 switch updater.state {
                 case .installing, .cancelling: EmptyView()
@@ -70,7 +73,7 @@ struct AppUpdateView: View {
                 Spacer()
                 Link("Что нового", destination: URL(string: "https://github.com/BeeSave/BeeSave/releases/latest")!)
             }
-        }.padding(24).frame(width: 550, height: 440).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.honey)
+        }.padding(24) }.frame(width: min(740, 550 * appearance.scale), height: min(740, 440 * appearance.scale)).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.controlAccent).beeAppearance()
         .onDisappear { updater.dismiss() }
         .confirmationDialog("Продолжить с текущим бюджетом?", isPresented: $keepCurrent) {
             Button("Продолжить") { updater.keepCurrentBudget() }

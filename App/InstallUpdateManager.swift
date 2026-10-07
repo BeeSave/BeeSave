@@ -12,6 +12,34 @@ enum InstallUpdateState: Equatable {
     }
 }
 
+#if DEBUG && UI_SMOKE
+struct AppearanceUpdateTransport: AppUpdateTransport {
+    func data(from url: URL, limit: Int) async throws -> Data {
+        let prefix = "https://github.com/BeeSave/BeeSave/releases/download/v2.0.0/"
+        if url == AppUpdateURLs.latest {
+            let assets = ["latest.json", "appcast.xml", "BeeSave-macos-arm64.zip", "BeeSave-macos-arm64.zip.sha256", "BeeSave-macos-arm64.dmg", "BeeSave-macos-arm64.dmg.sha256"].map { ["name": $0, "browser_download_url": prefix + $0] }
+            return try JSONSerialization.data(withJSONObject: ["tag_name": "v2.0.0", "draft": false, "prerelease": false, "assets": assets])
+        }
+        return try JSONSerialization.data(withJSONObject: ["schema_version": 1, "version": "2.0.0", "build": 99, "minimum_macos": "26.0", "architecture": "arm64", "repository": "BeeSave/BeeSave", "tag": "v2.0.0", "asset_url": prefix + "BeeSave-macos-arm64.zip", "sha256": String(repeating: "0", count: 64)])
+    }
+    func download(from url: URL, to file: URL, limit: Int, progress: @escaping @Sendable (Double?) -> Void) async throws { throw CancellationError() }
+}
+
+extension InstallUpdateManager {
+    static let appearanceStateTitles = ["Ожидание", "Проверка", "Актуальная", "Нет выпусков", "Доступно", "Несовместимо", "Проверка ленты", "Загрузка 45%", "Загрузка", "Распаковка 70%", "Распаковка", "Ожидание формы", "Подготовка", "Установка", "Отмена", "Отменено", "Ошибка"]
+    func previewAppearanceState(_ index: Int) async {
+        // An unattached manager cannot prepare or install an application.
+        guard model == nil else { return }
+        do {
+            let result = try await client.checkInstall(version: "1.0.0", build: 1, macOS: "27.0", architecture: "arm64")
+            guard case .available(let release) = result else { return }
+            let states: [InstallUpdateState] = [.idle, .checking, .current, .noRelease, .available(release), .incompatible(release.manifest), .checkingFeed, .downloading(0.45), .downloading(nil), .extracting(0.7), .extracting(nil), .waiting("Завершите редактирование открытой формы, затем повторите установку. Несохранённые изменения останутся на месте."), .preparing, .installing, .cancelling, .cancelled, .failed("Обновление не установлено. Прежнее приложение и бюджет сохранены. Не удалось проверить подпись загруженного приложения; повторите загрузку.")]
+            guard states.indices.contains(index) else { return }; state = states[index]
+        } catch { state = .failed(error.localizedDescription) }
+    }
+}
+#endif
+
 @MainActor final class InstallUpdateManager: NSObject, ObservableObject {
     @Published private(set) var state: InstallUpdateState = .idle
     @Published private(set) var recoveryFolder: URL?

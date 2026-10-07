@@ -12,60 +12,130 @@ enum BeeStyle {
             return NSColor(srgbRed: Double((value >> 16) & 255) / 255, green: Double((value >> 8) & 255) / 255, blue: Double(value & 255) / 255, alpha: 1)
         })
     }
-    static let background = LinearGradient(colors: [color(0x0B7076), color(0x03525A), color(0x013E46)], startPoint: .topLeading, endPoint: .bottomTrailing)
-    static let chrome = color(0x03434C), surface = color(0xFFF8E9, 0x0B4E57)
-    static let text = color(0x173F42, 0xF5EDDA), muted = color(0x506963, 0xB8D5CC)
-    static let onBackground = color(0xF5EDDA), backgroundMuted = color(0xD5E7DD)
-    static let honey = color(0xF7C756), honeyText = color(0x173F42)
-    static let selected = color(0xE4EADC, 0x24616A), line = color(0x739186, 0x779B94)
-    static let positive = color(0x23675D, 0x96D8B9), warning = color(0x77510B, 0xF7D78D)
-    static let negative = color(0xA23E31, 0xFFB8A6), expense = color(0xA97216, 0xF7C756)
+    private static func role(_ keyPath: KeyPath<AppearancePalette, AppearanceColor>) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let palette = AppearanceStore.shared.preferences.palette(systemDark: appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+            let value = palette[keyPath: keyPath]
+            return NSColor(srgbRed: value.red, green: value.green, blue: value.blue, alpha: 1)
+        })
+    }
+    static var background: LinearGradient { LinearGradient(colors: (0...32).map { step in
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let palette = AppearanceStore.shared.preferences.palette(systemDark: appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+            let value = palette.backgroundStart.mixed(with: palette.backgroundEnd, fraction: Double(step) / 32)
+            return NSColor(srgbRed: value.red, green: value.green, blue: value.blue, alpha: 1)
+        })
+    }, startPoint: .topLeading, endPoint: .bottomTrailing) }
+    static var chrome: Color { role(\.chrome) }; static var surface: Color { role(\.surface) }
+    static var text: Color { role(\.text) }; static var muted: Color { role(\.muted) }
+    static var onBackground: Color { role(\.onBackground) }; static var backgroundMuted: Color { role(\.backgroundMuted) }
+    static var honey: Color { role(\.accent) }; static var honeyText: Color { role(\.accentText) }
+    static var selected: Color { role(\.selected) }; static var line: Color { role(\.line) }
+    static var backgroundLine: Color { role(\.backgroundLine) }
+    static var positive: Color { role(\.positive) }; static var warning: Color { role(\.warning) }
+    static var negative: Color { role(\.negative) }; static var expense: Color { role(\.expense) }
+    static var controlAccent: Color { role(\.controlAccent) }
 }
 
 struct BeePrimaryStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.headline).padding(.horizontal, 14).padding(.vertical, 9)
+        BeePrimaryBody(label: configuration.label, pressed: configuration.isPressed, enabled: enabled)
+    }
+}
+
+private struct BeePrimaryBody<Label: View>: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
+    var label: Label; var pressed: Bool; var enabled: Bool
+    @State private var hover = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        label.beeFont(.headline).padding(.horizontal, 14).padding(.vertical, 9).frame(minWidth: 28, minHeight: 28)
             .foregroundStyle(BeeStyle.honeyText).background(BeeStyle.honey, in: RoundedRectangle(cornerRadius: 9))
-            .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
+            .overlay { RoundedRectangle(cornerRadius: 9).strokeBorder(BeeStyle.honeyText, lineWidth: 1) }
+            .overlay { RoundedRectangle(cornerRadius: 9).fill(BeeStyle.honeyText.opacity(pressed ? 0.16 : hover && enabled ? 0.07 : 0)).allowsHitTesting(false) }
+            .opacity(enabled ? 1 : 0.55).onHover { hover = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hover)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: pressed)
+    }
+}
+
+struct BeeRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { BeeRowBody(label: configuration.label, pressed: configuration.isPressed) }
+}
+private struct BeeRowBody<Label: View>: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
+    var label: Label; var pressed: Bool
+    @State private var hover = false
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        label.frame(minWidth: 28, minHeight: 28).contentShape(RoundedRectangle(cornerRadius: 8))
+            .background(Color.primary.opacity(enabled && (hover || pressed) ? (pressed ? 0.16 : 0.08) : 0), in: RoundedRectangle(cornerRadius: 8))
+            .opacity(enabled ? 1 : 0.55).onHover { hover = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hover)
     }
 }
 
 struct BeeSurface: ViewModifier {
     var padding: CGFloat = 20
-    func body(content: Content) -> some View { content.padding(padding).foregroundStyle(BeeStyle.text).background(BeeStyle.surface, in: RoundedRectangle(cornerRadius: 14)) }
+    @Environment(\.beeAppearance) private var appearance
+    @Environment(\.colorSchemeContrast) private var contrast
+    func body(content: Content) -> some View {
+        content.padding(padding).foregroundStyle(BeeStyle.text).tint(BeeStyle.controlAccent)
+            .background { RoundedRectangle(cornerRadius: 14).fill(BeeStyle.surface)
+                .shadow(color: .black.opacity(0.13), radius: 12, x: 0, y: 5)
+                .shadow(color: .black.opacity(0.06), radius: 2, x: 0, y: 1) }
+            .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(BeeStyle.line, lineWidth: contrast == .increased ? 2 : 1).allowsHitTesting(false) }
+    }
 }
 extension View {
     func beeCard(padding: CGFloat = 20) -> some View { modifier(BeeSurface(padding: padding)) }
-    func beeWindow() -> some View { foregroundStyle(BeeStyle.onBackground).background(BeeStyle.background).tint(BeeStyle.honey) }
+    func beeWindow() -> some View { modifier(BeeWindowModifier()) }
+}
+
+private struct BeeWindowModifier: ViewModifier {
+    @ObservedObject private var store = AppearanceStore.shared
+    func body(content: Content) -> some View {
+        content.foregroundStyle(BeeStyle.onBackground).background(BeeStyle.background)
+            .tint(BeeStyle.honey).buttonStyle(BeeRowStyle()).beeAppearance()
+    }
 }
 
 struct FormField<Content: View>: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var title: String
     var hint: String? = nil
     @ViewBuilder var content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title).font(.subheadline.weight(.medium)); content()
-            if let hint { Text(hint).font(.caption).foregroundStyle(BeeStyle.muted) }
+            Text(title).beeFont(.subheadline.weight(.medium)); content()
+            if let hint { Text(hint).beeFont(.caption).foregroundStyle(BeeStyle.muted) }
         }
     }
 }
 
 struct SectionHeading<Actions: View>: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var title: String
     @ViewBuilder var actions: () -> Actions
-    var body: some View { HStack(alignment: .center, spacing: 16) { Text(title).font(.system(size: 28, weight: .semibold)); Spacer(); actions() } }
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 16) { Text(title).beeFont(.system(size: 28, weight: .semibold)).fixedSize(); Spacer(); actions().fixedSize() }
+            VStack(alignment: .leading, spacing: 14) { Text(title).beeFont(.system(size: 28, weight: .semibold)); WrappingLayout(spacing: 10) { actions() } }
+        }.fixedSize(horizontal: false, vertical: true)
+    }
 }
 
 struct PartialValue: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var value: Valuation
     var currency: String
     var large = false
     var onMissingOperations: (([UUID]) -> Void)? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(BeeFormat.money(value.known, currency: currency)).font(large ? .system(size: 32, weight: .semibold) : .title3.weight(.medium)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
+            Text(BeeFormat.money(value.known, currency: currency)).beeFont(large ? .system(size: 32, weight: .semibold) : .title3.weight(.medium)).monospacedDigit().fixedSize(horizontal: false, vertical: true)
             if value.partial { PartialStatus(value: value, onMissingOperations: onMissingOperations) }
         }.foregroundStyle(value.known < 0 ? BeeStyle.negative : BeeStyle.text)
     }
@@ -90,20 +160,21 @@ struct WrappingLayout: Layout {
 }
 
 struct PartialStatus: View {
+    @ObservedObject private var appearanceStore = AppearanceStore.shared
     var value: Valuation
     var onMissingOperations: (([UUID]) -> Void)? = nil
     @EnvironmentObject private var model: AppModel
     @State private var details = false
     var body: some View {
-        Button { details = true } label: { Label("Частично · " + value.partialDescription, systemImage: "exclamationmark.triangle") }.buttonStyle(.plain).font(.caption).foregroundStyle(BeeStyle.warning)
+        Button { details = true } label: { Label("Частично · " + value.partialDescription, systemImage: "exclamationmark.triangle") }.buttonStyle(BeeRowStyle()).beeFont(.caption).foregroundStyle(BeeStyle.warning)
             .popover(isPresented: $details) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Неполный итог").font(.headline)
+                    Text("Неполный итог").beeFont(.headline)
                     if !value.missing.isEmpty { Text("Без курса: \(value.missing.count). Валюты: \(value.currencies.sorted().joined(separator: ", ")).") }
                     if !value.missingConditions.isEmpty { Text("Есть неизвестные условия, налог или состав долга. Уточните договоры и банковские суммы."); Button("Открыть финансовый календарь") { details = false; model.section = .financialCalendar } }
                     let missing = Set(value.missing); let operations = model.db?.operations.filter { missing.contains($0.id) } ?? []
                     if !operations.isEmpty {
-                        Text("Для пересчёта нужен снимок курса в самой операции.").font(.caption).foregroundStyle(BeeStyle.muted)
+                        Text("Для пересчёта нужен снимок курса в самой операции.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
                         Button("Открыть операции без курса") { details = false; let ids = operations.map(\.id); if let onMissingOperations { onMissingOperations(ids) } else { model.showOperations(ids, title: "Операции без курса") } }
                     }
                     if !value.missing.isEmpty { SettingsLink { Text(operations.isEmpty ? "Добавить справочный курс" : "Открыть курсы и инструкции") }.simultaneousGesture(TapGesture().onEnded { details = false; model.settingsTask = .rates }) }
