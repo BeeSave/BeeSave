@@ -15,8 +15,9 @@ enum InstallUpdateState: Equatable {
 @MainActor final class InstallUpdateManager: NSObject, ObservableObject {
     @Published private(set) var state: InstallUpdateState = .idle
     @Published private(set) var recoveryFolder: URL?
-    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-    let build = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0
+    @Published private(set) var budgetVerificationError: String?
+    let version: String
+    let build: Int
     private weak var model: AppModel?
     private let client: AppUpdateClient
     private var checkTask: Task<Void, Never>?
@@ -30,7 +31,12 @@ enum InstallUpdateState: Equatable {
     private var cancelRequested = false
     private var handedOff = false
     private var pending = [UpdateSafetyRecord]()
-    init(client: AppUpdateClient = AppUpdateClient()) { self.client = client; super.init() }
+    init(client: AppUpdateClient = AppUpdateClient(), version: String? = nil, build: Int? = nil) {
+        self.client = client
+        self.version = version ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0")
+        self.build = build ?? (Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0)
+        super.init()
+    }
     private var safety: UpdateSafetyStore? { model.map { UpdateSafetyStore(directory: $0.root.appendingPathComponent("Updates.noindex")) } }
 
     func attach(_ model: AppModel) {
@@ -44,7 +50,8 @@ enum InstallUpdateState: Equatable {
             if !model.vault.exists || model.db != nil { confirmFirstLaunch() }
         } catch {
             model.updateVerificationPending = true
-            state = .failed("Не удалось проверить запись обновления. Защитные файлы сохранены: " + error.localizedDescription)
+            let message = "Не удалось проверить запись обновления. Защитные файлы сохранены: " + error.localizedDescription
+            budgetVerificationError = message; state = .failed(message)
             recoveryFolder = safety?.directory
         }
     }
@@ -61,13 +68,15 @@ enum InstallUpdateState: Equatable {
                 pending.removeAll { $0.id == record.id }
             }
             model.updateVerificationPending = false
+            budgetVerificationError = nil
             if !matches.isEmpty { model.notice = "BeeSave обновлён до версии \(version). Бюджет проверен и сохранён." }
             recoveryFolder = pending.isEmpty ? nil : safety.directory
         } catch {
             // Do not overwrite current data, delete the previous app, or start a
             // background write before this discrepancy has been reviewed.
             model.updateVerificationPending = true
-            state = .failed("Проверка сохранности бюджета не завершена. Исходный бюджет и прежнее приложение доступны в защитной папке. " + error.localizedDescription)
+            let message = "Проверка сохранности бюджета не завершена. Исходный бюджет и прежнее приложение доступны в защитной папке. " + error.localizedDescription
+            budgetVerificationError = message; state = .failed(message)
             recoveryFolder = safety.directory
         }
     }
@@ -83,6 +92,7 @@ enum InstallUpdateState: Equatable {
                 pending[index].phase = .retained; try safety.write(pending[index])
             }
             model.updateVerificationPending = false
+            budgetVerificationError = nil
             model.notice = "Вы выбрали текущий бюджет. Защитная папка сохранена; автоматический возврат данных не выполнялся."
         } catch { state = .failed(error.localizedDescription) }
     }

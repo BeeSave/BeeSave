@@ -45,9 +45,13 @@ struct AppUpdateView: View {
                 case .installing: ProgressView("Устанавливаем обновление. BeeSave перезапустится…")
                 case .cancelling: ProgressView("Завершаем отмену обновления…")
                 case .cancelled: Text("Обновление отменено. Установка при закрытии BeeSave не запланирована.")
-                case .failed(let message): Text(message).foregroundStyle(BeeStyle.negative)
+                case .failed(let message):
+                    if message != updater.budgetVerificationError { Text(message).foregroundStyle(BeeStyle.negative) }
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
+            if let message = updater.budgetVerificationError {
+                Text(message).foregroundStyle(BeeStyle.negative)
+            }
             if let folder = updater.recoveryFolder {
                 Button("Показать защитную папку") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
             }

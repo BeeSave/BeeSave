@@ -36,7 +36,7 @@ struct SheetRoute: Identifiable {
     @Published var updateFrozen = false
     @Published var updateForms = Set<UUID>()
     var confirmUpdatedBudget: (() -> Void)?
-    var updateVerificationPending = false
+    @Published var updateVerificationPending = false
     #if DEBUG && UI_SMOKE && NOTIFICATION_QA
     var notificationQAActive = false
     #endif
@@ -50,7 +50,10 @@ struct SheetRoute: Identifiable {
         return nil
     }
     private func requireWritableSession() throws {
-        guard !updateFrozen, !updateVerificationPending else { throw BudgetError.storage("Дождитесь завершения проверки обновления.") }
+        guard !updateFrozen else { throw BudgetError.storage("Дождитесь завершения установки обновления.") }
+        guard !updateVerificationPending else {
+            throw BudgetError.storage("Не завершена проверка сохранности бюджета после обновления. Откройте «Проверить обновление» в меню BeeSave.")
+        }
     }
     init() {
         #if DEBUG && UI_SMOKE
@@ -59,6 +62,9 @@ struct SheetRoute: Identifiable {
             vault = VaultStore(url: root.appendingPathComponent("vault.beesave"))
             let name = ProcessInfo.processInfo.environment["BEESAVE_UI_STATE"] ?? ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-state=") })?.replacingOccurrences(of: "--ui-state=", with: "") ?? "filled"
             loadPreview(PreviewScenario(rawValue: name) ?? .filled)
+            #if UPDATE_QA
+            prepareUpdateMigrationQA()
+            #endif
             installObservers(); return
         }
         #endif

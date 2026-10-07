@@ -2,10 +2,11 @@ import XCTest
 @testable import BudgetCore
 
 final class UpdateSafetyTests: XCTestCase {
-    private func fixture() throws -> (URL, VaultStore, UpdateSafetyStore, URL) {
+    private func fixture(schema: Int = 3) throws -> (URL, VaultStore, UpdateSafetyStore, URL) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let vault = VaultStore(url: root.appendingPathComponent("vault.beesave"))
         var database = Database()
+        database.version = schema
         try Ledger.saveAccount(Account(name: "Original budget", currency: "RUB"), opening: 12_345, in: &database)
         database.settings.backupPath = "/external/backups"
         database.dashboard[0].visible = false
@@ -70,6 +71,37 @@ final class UpdateSafetyTests: XCTestCase {
         XCTAssertThrowsError(try safety.removeVerified(record, vault: vault, version: "1.2.0", build: 6, application: app))
         XCTAssertEqual(try Data(contentsOf: vault.url), current)
         XCTAssertEqual(vault.db?.accounts[0].name, "New confirmed user input")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: safety.snapshot(for: record).path))
+    }
+    func testSchemaMigrationCanCompleteUpdateVerification() throws {
+        for schema in [1, 2] {
+            let (root, vault, safety, app) = try fixture(schema: schema)
+            defer { vault.close(); try? FileManager.default.removeItem(at: root) }
+            let original = try XCTUnwrap(vault.db)
+            var record = try safety.prepare(vault: vault, version: "1.3.1", build: 12, application: app)
+            record.phase = .handedOff; try safety.write(record)
+            let snapshot = try Data(contentsOf: safety.snapshot(for: record))
+            vault.close(); try vault.unlock(password: "Original password 123")
+            XCTAssertEqual(vault.db, try FinancialLedger.migrate(original))
+            XCTAssertNoThrow(try safety.removeVerified(record, vault: vault, version: "1.3.1", build: 12, application: app))
+            XCTAssertTrue(try safety.pending().isEmpty)
+            let copies = try FileManager.default.contentsOfDirectory(at: root.appendingPathComponent("Backups.noindex"), includingPropertiesForKeys: nil)
+            XCTAssertEqual(copies.count, 1)
+            let recovered = try vault.withKey { try VaultFile.read(Data(contentsOf: copies[0])).decrypt(key: $0) }
+            XCTAssertEqual(recovered, original)
+            XCTAssertEqual(try VaultFile.read(snapshot).bootstrap.databaseID, original.id)
+        }
+    }
+    func testMigrationDoesNotExcuseChangedUserData() throws {
+        let (root, vault, safety, app) = try fixture(schema: 1)
+        defer { vault.close(); try? FileManager.default.removeItem(at: root) }
+        var record = try safety.prepare(vault: vault, version: "1.3.1", build: 12, application: app)
+        record.phase = .handedOff; try safety.write(record)
+        vault.close(); try vault.unlock(password: "Original password 123")
+        try vault.transaction { $0.accounts[0].name = "Changed after migration" }
+        let current = try Data(contentsOf: vault.url)
+        XCTAssertThrowsError(try safety.removeVerified(record, vault: vault, version: "1.3.1", build: 12, application: app))
+        XCTAssertEqual(try Data(contentsOf: vault.url), current)
         XCTAssertTrue(FileManager.default.fileExists(atPath: safety.snapshot(for: record).path))
     }
     func testSnapshotFailurePreservesOriginalAndPreparedPhaseCannotBeAcknowledged() throws {

@@ -83,7 +83,11 @@ public struct UpdateSafetyStore {
             guard Self.hash(bytes) == record.snapshotSHA256 else { throw BudgetError.corrupt }
             let file = try VaultFile.read(bytes)
             let original = try vault.withKey { try file.decrypt(key: $0) }
-            guard database == original else { throw BudgetError.conflict("Бюджет изменился после подготовки обновления. Защитная копия сохранена.") }
+            // Opening the replacement may have migrated the original schema.
+            // Compare the complete result of that same migration, including
+            // revision and all user data; unrelated writes still fail closed.
+            let expected = try FinancialLedger.migrate(original)
+            guard database == expected else { throw BudgetError.conflict("Бюджет изменился после подготовки обновления. Защитная копия сохранена.") }
         } else {
             guard !vault.exists, record.snapshotSHA256 == nil else { throw BudgetError.corrupt }
         }

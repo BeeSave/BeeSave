@@ -29,6 +29,7 @@ private struct Transport: AppUpdateTransport {
 
 @main struct CoordinatorTests {
     @MainActor static func main() async throws {
+        setbuf(stdout, nil)
         _ = NSApplication.shared
         var failures = 0
         func check(_ condition: Bool, _ name: String) {
@@ -170,6 +171,81 @@ private struct Transport: AppUpdateTransport {
         try await wait { !model.financialBusy }
         model.pendingFinancialRoute = (token, scheduled.eventID); model.handleFinancialNotification()
         check(model.sheet == nil, "cancelled payment rejects stale notification route")
+        for schema in [1, 2] {
+            let migrated = AppModel()
+            let bank = UserBank(name: "Fictional migration bank")
+            try migrated.vault.transaction { $0.version = schema }
+            let original = migrated.vault.db!
+            let store = UpdateSafetyStore(directory: migrated.root.appendingPathComponent("Updates.noindex"))
+            var record = try store.prepare(vault: migrated.vault, version: "1.3.1", build: 12, application: Bundle.main.bundleURL)
+            record.phase = .handedOff; try store.write(record)
+            migrated.lock()
+            let launch = InstallUpdateManager(version: "1.3.1", build: 12)
+            launch.attach(migrated)
+            check(migrated.updateVerificationPending, "schema \(schema) waits for budget unlock before verification")
+            migrated.unlock(password: "UI fixture password only")
+            let afterMigration = try store.pending()
+            check(!migrated.updateVerificationPending && launch.budgetVerificationError == nil && afterMigration.isEmpty,
+                  "schema \(schema) migration completes first-launch verification")
+            try migrated.commit { db in
+                try FinancialLedger.saveBank(bank, in: &db)
+                var account = db.accounts[0]; account.bankID = bank.id; try Ledger.saveAccount(account, in: &db)
+            }
+            check(migrated.db?.accounts[0].bankID == bank.id && migrated.db?.operations == original.operations,
+                  "schema \(schema) bank change saves without altering existing operations")
+            migrated.lock(); migrated.unlock(password: "UI fixture password only")
+            check(!migrated.updateVerificationPending && migrated.db?.accounts[0].bankID == bank.id,
+                  "schema \(schema) bank change survives a second unlock")
+            migrated.lock(); try FileManager.default.removeItem(at: migrated.root)
+        }
+        let patched = AppModel()
+        try patched.vault.transaction { $0.version = 1 }
+        let oldSafety = UpdateSafetyStore(directory: patched.root.appendingPathComponent("Updates.noindex"))
+        var oldRecord = try oldSafety.prepare(vault: patched.vault, version: "1.3.0", build: 11, application: Bundle.main.bundleURL)
+        oldRecord.phase = .handedOff; try oldSafety.write(oldRecord)
+        let oldSnapshot = try Data(contentsOf: oldSafety.snapshot(for: oldRecord))
+        patched.lock()
+        let patchUpdater = InstallUpdateManager(version: "1.3.1", build: 12)
+        patchUpdater.attach(patched); patched.unlock(password: "UI fixture password only")
+        check(!patched.updateVerificationPending && patchUpdater.budgetVerificationError == nil,
+              "manual patch installation can reopen a budget blocked by the previous version")
+        let patchBank = UserBank(name: "Fictional patch bank")
+        try patched.commit { db in
+            try FinancialLedger.saveBank(patchBank, in: &db)
+            var account = db.accounts[0]; account.bankID = patchBank.id; try Ledger.saveAccount(account, in: &db)
+        }
+        check(patched.db?.accounts[0].bankID == patchBank.id, "manual patch installation restores bank editing")
+        let retainedOldSnapshot = try Data(contentsOf: oldSafety.snapshot(for: oldRecord))
+        let retainedOldRecords = try oldSafety.pending()
+        check(retainedOldSnapshot == oldSnapshot && retainedOldRecords.contains(oldRecord),
+              "manual patch preserves the prior version recovery snapshot")
+        patched.lock(); try FileManager.default.removeItem(at: patched.root)
+        let changed = AppModel()
+        try changed.vault.transaction { $0.version = 1 }
+        let changedSafety = UpdateSafetyStore(directory: changed.root.appendingPathComponent("Updates.noindex"))
+        var changedRecord = try changedSafety.prepare(vault: changed.vault, version: "1.3.1", build: 12, application: Bundle.main.bundleURL)
+        changedRecord.phase = .handedOff; try changedSafety.write(changedRecord)
+        changed.lock(); try changed.vault.unlock(password: "UI fixture password only")
+        try changed.vault.transaction { $0.accounts[0].name = "Actual later user change" }
+        changed.db = changed.vault.db
+        let changedGate = try ReleaseGate()
+        let changedUpdater = InstallUpdateManager(client: AppUpdateClient(transport: Transport(gate: changedGate)), version: "1.3.1", build: 12)
+        changedUpdater.attach(changed)
+        check(changed.updateVerificationPending && changedUpdater.budgetVerificationError != nil,
+              "real changes after migration keep the budget protected")
+        changedUpdater.check()
+        while !(await changedGate.waiting) { await Task.yield() }
+        await changedGate.finishLate()
+        try await wait { if case .available = changedUpdater.state { return true }; return false }
+        check(changed.updateVerificationPending && changedUpdater.budgetVerificationError != nil && changedUpdater.canKeepCurrentBudget,
+              "completed release check cannot hide a separate budget verification issue")
+        let protectedBytes = try Data(contentsOf: changed.vault.url)
+        refused = false
+        do { try changed.commit { $0.accounts[0].bankID = nil } } catch { refused = true }
+        let stillProtected = try Data(contentsOf: changed.vault.url)
+        check(refused && protectedBytes == stillProtected && FileManager.default.fileExists(atPath: changedSafety.snapshot(for: changedRecord).path),
+              "unresolved discrepancy preserves current ciphertext and original snapshot")
+        changed.lock(); try FileManager.default.removeItem(at: changed.root)
         model.vault.close()
         try FileManager.default.removeItem(at: model.root)
         print("Coordinator failures: \(failures)")
