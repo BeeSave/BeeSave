@@ -15,7 +15,7 @@ class ReleasePolicyTests(unittest.TestCase):
         self.root = Path(self.workspace.name)
         source = Path(__file__).resolve().parent.parent
         (self.root / 'scripts').mkdir()
-        for name in ('package_release.py', 'verify_financial_catalog.py', 'release_entitlements.py'):
+        for name in ('package_release.py', 'verify_financial_catalog.py', 'world_bank_catalog.py', 'release_entitlements.py'):
             shutil.copyfile(source / 'scripts' / name, self.root / 'scripts' / name)
         expected = plistlib.loads((source / 'App/Info.plist').read_bytes())
         (self.root / 'App').mkdir()

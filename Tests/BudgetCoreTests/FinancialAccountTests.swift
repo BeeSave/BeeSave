@@ -7,13 +7,13 @@ final class FinancialAccountTests: XCTestCase {
     func testOfflineBankLogoResourcesAreBundledForTwentyBanksPerMarket() throws {
         let catalog = BankCatalog.shared
         XCTAssertGreaterThan(catalog.banks.count, 10_000)
-        XCTAssertEqual(catalog.manifest.nameScope, "top20-per-market")
+        XCTAssertEqual(catalog.manifest.nameScope, "top20-economies-plus-retained")
         XCTAssertFalse(catalog.manifest.namesComplete)
         XCTAssertTrue(catalog.readinessIssues.isEmpty, catalog.readinessIssues.joined(separator: "; "))
         let branded = catalog.banks.filter { $0.logoResource != nil }
-        XCTAssertEqual(branded.count, 60)
-        for market in ["RU", "US", "GB"] {
-            XCTAssertEqual(branded.filter { $0.country == market }.count, 20)
+        for market in BankMarket.all where market.requiresLogos {
+            let expected = BankRankingManifest.shared?.countries[market.id]?.smallSystem?.activeBanks ?? 20
+            XCTAssertEqual(branded.filter { $0.country == market.id }.count, expected, market.id)
         }
         for bank in branded {
             XCTAssertTrue(bank.active, bank.id)

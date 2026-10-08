@@ -235,7 +235,7 @@ struct BankMark: View {
         return nil
     }
     private var catalogPicture: NSImage? {
-        if let bank = BankCatalog.shared.banks.first(where: { $0.id == bankID }), let url = BankCatalog.shared.logoURL(bank) { return NSImage(contentsOf: url) }
+        if let bankID, let bank = BankCatalog.get(bankID), let url = BankCatalog.shared.logoURL(bank) { return NSImage(contentsOf: url) }
         return nil
     }
     var body: some View {
@@ -257,16 +257,68 @@ struct BankPicker: View {
     @State private var search = ""
     @State private var showManual = false
     @State private var expanded = false
+    @State private var keyboardBankID: String?
+    @FocusState private var searchFocused: Bool
+    private var groups: [BankChoiceGroup] {
+        BankCatalog.shared.selectionGroups(search, primaryCurrency: model.db?.settings.baseCurrency,
+                                           userBanks: model.db?.financeData.banks ?? [])
+    }
     var body: some View {
+        let visibleGroups = expanded ? groups : []
         DisclosureGroup(model.db?.financialBankName(bankID) ?? "Банк · необязательно", isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 10) {
-                TextField("Поиск банка", text: $search).textFieldStyle(BeeTextFieldStyle())
+                TextField("Поиск банка", text: $search).textFieldStyle(BeeTextFieldStyle()).focused($searchFocused)
+                    .onKeyPress(.downArrow) { moveBankSelection(1); return .handled }
+                    .onKeyPress(.upArrow) { moveBankSelection(-1); return .handled }
+                    .onSubmit {
+                        if let identity = keyboardBankID ?? (search.isEmpty ? nil : groups.first?.banks.first?.id) {
+                            bankID = identity; expanded = false
+                        }
+                    }
+                    .onExitCommand { expanded = false }
                 Button("Без банка") { bankID = nil; expanded = false }
-                ForEach(model.db?.financeData.banks.filter { !$0.archived && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) } ?? []) { bank in Button { bankID = bank.id; expanded = false } label: { HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country.rawValue) } }.buttonStyle(BeeRowStyle()) }
-                ForEach(Array(BankCatalog.shared.search(search).prefix(40))) { bank in Button { bankID = bank.id; expanded = false } label: { HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country) } }.buttonStyle(BeeRowStyle()) }
+                ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(visibleGroups) { group in
+                            Section {
+                                ForEach(group.banks) { bank in
+                                    Button { bankID = bank.id; expanded = false } label: {
+                                        HStack(spacing: 10) {
+                                            BankMark(bankID: bank.id)
+                                            Text(bank.name).fixedSize(horizontal: false, vertical: true)
+                                            Spacer(minLength: 0)
+                                            if bankID == bank.id { Image(systemName: "checkmark").accessibilityLabel("Выбран") }
+                                        }.frame(maxWidth: .infinity, alignment: .leading)
+                                    }.buttonStyle(BeeRowStyle()).accessibilityLabel(bank.name + ", " + group.name)
+                                        .background(keyboardBankID == bank.id ? BeeStyle.honey.opacity(0.16) : Color.clear)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .id(bank.id)
+                                }
+                            } header: {
+                                Text(group.name).beeFont(.headline).padding(.top, 8).accessibilityAddTraits(.isHeader)
+                            }
+                        }
+                        if visibleGroups.isEmpty { Text("Банки не найдены").foregroundStyle(BeeStyle.muted).padding(.vertical, 8) }
+                    }.padding(.horizontal, 4)
+                }.frame(maxHeight: 300).accessibilityLabel("Список банков")
+                    .onChange(of: keyboardBankID) { _, identity in
+                        if let identity { proxy.scrollTo(identity, anchor: .center) }
+                    }
+                }
                 Button("Добавить банк вручную…") { showManual = true }
             }.padding(.top, 10)
-        }.sheet(isPresented: $showManual) { BankEditor(onSaved: { bankID = $0; expanded = false }) }
+        }.onChange(of: expanded) { _, open in searchFocused = open; keyboardBankID = nil }
+        .onChange(of: search) { _, _ in keyboardBankID = nil }
+        .sheet(isPresented: $showManual) { BankEditor(onSaved: { bankID = $0; expanded = false }) }
+    }
+    private func moveBankSelection(_ direction: Int) {
+        let choices = groups.flatMap(\.banks)
+        guard !choices.isEmpty else { keyboardBankID = nil; return }
+        let current = choices.firstIndex { $0.id == keyboardBankID }
+        let next = current.map { min(max($0 + direction, 0), choices.count - 1) }
+            ?? (direction > 0 ? 0 : choices.count - 1)
+        keyboardBankID = choices[next].id
     }
 }
 struct BankEditor: View {
@@ -320,7 +372,11 @@ struct BankReferenceList: View {
             HStack { BankMark(bankID: bank.id); Text(bank.name + " · " + bank.country.rawValue); Spacer(); Button("Изменить") { editing = bank }; Button(bank.archived ? "Вернуть" : "Архивировать") { model.perform { db in var copy = bank; copy.archived.toggle(); try FinancialLedger.saveBank(copy, in: &db) } } }.padding(.vertical, 8)
         }
         Divider(); Text("Каталог: \(BankCatalog.shared.banks.count) записей · \(BankCatalog.shared.manifest.builtOn)").beeFont(.headline)
-        ForEach(Array(BankCatalog.shared.search(search, includeInactive: archived).prefix(150))) { bank in HStack { BankMark(bankID: bank.id); Text(bank.name); Spacer(); Text(bank.country).beeFont(.caption) }.padding(.vertical, 6) }
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(BankCatalog.shared.search(search, includeInactive: archived, primaryCurrency: model.db?.settings.baseCurrency)) { bank in
+                HStack { BankMark(bankID: bank.id); Text(bank.name).fixedSize(horizontal: false, vertical: true); Spacer(); Text(BankMarket.get(bank.country)?.name ?? bank.country).beeFont(.caption) }.padding(.vertical, 6)
+            }
+        }
         if !BankCatalog.shared.manifest.logosComplete { Text("Иконки банков ещё проходят проверку.").beeFont(.caption).foregroundStyle(BeeStyle.warning) }
         EmptyView().sheet(item: $editing) { BankEditor(bank: $0) }
     }

@@ -229,5 +229,5 @@ public struct DebtSummary: Equatable, Sendable {
 extension Database {
     public var financeData: FinancialBook { get { finances ?? FinancialBook() } set { finances = newValue } }
     public func contract(for accountID: UUID) -> FinancialContract? { finances?.contracts.first { $0.accountID == accountID } }
-    public func financialBankName(_ id: String?) -> String? { guard let id else { return nil }; return finances?.banks.first { $0.id == id }?.name ?? BankCatalog.shared.banks.first { $0.id == id }?.name }
+    public func financialBankName(_ id: String?) -> String? { guard let id else { return nil }; return finances?.banks.first { $0.id == id }?.name ?? BankCatalog.get(id)?.name }
 }

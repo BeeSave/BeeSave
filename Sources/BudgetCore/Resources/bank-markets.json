@@ -1,0 +1,322 @@
+[
+  {
+    "id": "RU",
+    "name": "Россия",
+    "currency": "RUB",
+    "areaRank": 1,
+    "requiresLogos": true,
+    "economyRank": 8
+  },
+  {
+    "id": "CA",
+    "name": "Канада",
+    "currency": "CAD",
+    "areaRank": 2,
+    "requiresLogos": true,
+    "economyRank": 10
+  },
+  {
+    "id": "US",
+    "name": "США",
+    "currency": "USD",
+    "areaRank": 3,
+    "requiresLogos": true,
+    "economyRank": 1
+  },
+  {
+    "id": "CN",
+    "name": "Китай",
+    "currency": "CNY",
+    "areaRank": 4,
+    "requiresLogos": true,
+    "economyRank": 2
+  },
+  {
+    "id": "BR",
+    "name": "Бразилия",
+    "currency": "BRL",
+    "areaRank": 5,
+    "requiresLogos": true,
+    "economyRank": 11
+  },
+  {
+    "id": "AU",
+    "name": "Австралия",
+    "currency": "AUD",
+    "areaRank": 6,
+    "requiresLogos": true,
+    "economyRank": 14
+  },
+  {
+    "id": "IN",
+    "name": "Индия",
+    "currency": "INR",
+    "areaRank": 7,
+    "requiresLogos": true,
+    "economyRank": 6
+  },
+  {
+    "id": "AR",
+    "name": "Аргентина",
+    "currency": "ARS",
+    "areaRank": 8,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "KZ",
+    "name": "Казахстан",
+    "currency": "KZT",
+    "areaRank": 9,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "DZ",
+    "name": "Алжир",
+    "currency": "DZD",
+    "areaRank": 10,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "CD",
+    "name": "ДР Конго",
+    "currency": "CDF",
+    "areaRank": 11,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "SA",
+    "name": "Саудовская Аравия",
+    "currency": "SAR",
+    "areaRank": 12,
+    "requiresLogos": false,
+    "economyRank": 19
+  },
+  {
+    "id": "MX",
+    "name": "Мексика",
+    "currency": "MXN",
+    "areaRank": 13,
+    "requiresLogos": true,
+    "economyRank": 15
+  },
+  {
+    "id": "ID",
+    "name": "Индонезия",
+    "currency": "IDR",
+    "areaRank": 14,
+    "requiresLogos": false,
+    "economyRank": 17
+  },
+  {
+    "id": "SD",
+    "name": "Судан",
+    "currency": "SDG",
+    "areaRank": 15,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "LY",
+    "name": "Ливия",
+    "currency": "LYD",
+    "areaRank": 16,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "IR",
+    "name": "Иран",
+    "currency": "IRR",
+    "areaRank": 17,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "MN",
+    "name": "Монголия",
+    "currency": "MNT",
+    "areaRank": 18,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "PE",
+    "name": "Перу",
+    "currency": "PEN",
+    "areaRank": 19,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "TD",
+    "name": "Чад",
+    "currency": "XAF",
+    "areaRank": 20,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "NE",
+    "name": "Нигер",
+    "currency": "XOF",
+    "areaRank": 21,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "AO",
+    "name": "Ангола",
+    "currency": "AOA",
+    "areaRank": 22,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "ML",
+    "name": "Мали",
+    "currency": "XOF",
+    "areaRank": 23,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "ZA",
+    "name": "ЮАР",
+    "currency": "ZAR",
+    "areaRank": 24,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "CO",
+    "name": "Колумбия",
+    "currency": "COP",
+    "areaRank": 25,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "ET",
+    "name": "Эфиопия",
+    "currency": "ETB",
+    "areaRank": 26,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "BO",
+    "name": "Боливия",
+    "currency": "BOB",
+    "areaRank": 27,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "MR",
+    "name": "Мавритания",
+    "currency": "MRU",
+    "areaRank": 28,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "EG",
+    "name": "Египет",
+    "currency": "EGP",
+    "areaRank": 29,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "TZ",
+    "name": "Танзания",
+    "currency": "TZS",
+    "areaRank": 30,
+    "requiresLogos": false,
+    "economyRank": null
+  },
+  {
+    "id": "GB",
+    "name": "Великобритания",
+    "currency": "GBP",
+    "areaRank": null,
+    "requiresLogos": true,
+    "economyRank": 5
+  },
+  {
+    "id": "DE",
+    "name": "Германия",
+    "currency": "EUR",
+    "areaRank": null,
+    "economyRank": 3,
+    "requiresLogos": false
+  },
+  {
+    "id": "JP",
+    "name": "Япония",
+    "currency": "JPY",
+    "areaRank": null,
+    "economyRank": 4,
+    "requiresLogos": false
+  },
+  {
+    "id": "FR",
+    "name": "Франция",
+    "currency": "EUR",
+    "areaRank": null,
+    "economyRank": 7,
+    "requiresLogos": false
+  },
+  {
+    "id": "IT",
+    "name": "Италия",
+    "currency": "EUR",
+    "areaRank": null,
+    "economyRank": 9,
+    "requiresLogos": false
+  },
+  {
+    "id": "ES",
+    "name": "Испания",
+    "currency": "EUR",
+    "areaRank": null,
+    "economyRank": 12,
+    "requiresLogos": false
+  },
+  {
+    "id": "KR",
+    "name": "Южная Корея",
+    "currency": "KRW",
+    "areaRank": null,
+    "economyRank": 13,
+    "requiresLogos": false
+  },
+  {
+    "id": "TR",
+    "name": "Турция",
+    "currency": "TRY",
+    "areaRank": null,
+    "economyRank": 16,
+    "requiresLogos": true
+  },
+  {
+    "id": "NL",
+    "name": "Нидерланды",
+    "currency": "EUR",
+    "areaRank": null,
+    "economyRank": 18,
+    "requiresLogos": false
+  },
+  {
+    "id": "CH",
+    "name": "Швейцария",
+    "currency": "CHF",
+    "areaRank": null,
+    "economyRank": 20,
+    "requiresLogos": false
+  }
+]

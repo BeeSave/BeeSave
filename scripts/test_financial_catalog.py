@@ -11,7 +11,7 @@ from datetime import date
 import csv
 import io
 from zipfile import ZipFile
-from verify_financial_catalog import inspect
+from verify_financial_catalog import inspect, verify_bundled_catalog
 
 
 class FinancialCatalogTests(unittest.TestCase):
@@ -23,11 +23,42 @@ class FinancialCatalogTests(unittest.TestCase):
         path = Path(__file__).resolve().parent.parent / 'Sources/BudgetCore/Resources/banks.json'
         report = inspect(path)
         self.assertGreater(report['records'], 10000)
-        self.assertEqual(report['verifiedRequiredLogos'], 60)
+        self.assertGreaterEqual(report['verifiedRequiredLogos'], 60)
         self.assertEqual(report['missingRequiredLogos'], [])
         self.assertEqual(report['status'], 'ready', report['issues'])
         self.assertFalse(report['namesComplete'])
         self.assertTrue(report['coverageNotes'])
+
+    def test_installed_catalog_requires_exact_reviewed_metadata_and_prepared_logos(self):
+        source = Path(__file__).resolve().parent.parent / 'Sources/BudgetCore/Resources'
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / 'Example.app'
+            resources = app / 'Contents/Resources/BudgetCore.bundle'
+            resources.mkdir(parents=True)
+            for name in ('banks.json', 'bank-brands.json', 'bank-markets.json', 'bank-rankings.json'):
+                shutil.copy2(source / name, resources / name)
+            for logo in (source / 'BankLogos').glob('*.png'):
+                shutil.copy2(logo, resources / logo.name)
+            # Every reviewed resource must ship, including retained optional marks.
+            report = verify_bundled_catalog(app, source, require_complete=False)
+            self.assertEqual(report['verifiedLogos'], inspect(source / 'banks.json')['verifiedLogos'])
+            self.assertEqual(verify_bundled_catalog(app, source)['status'], 'ready')
+            logo = resources / 'ru-sber.png'
+            original = logo.read_bytes()
+            logo.unlink()
+            with self.assertRaisesRegex(ValueError, 'missing or altered'):
+                verify_bundled_catalog(app, source, require_complete=False)
+            logo.write_bytes(original + b'changed')
+            with self.assertRaisesRegex(ValueError, 'missing or altered'):
+                verify_bundled_catalog(app, source, require_complete=False)
+            logo.write_bytes(original)
+            markets = resources / 'bank-markets.json'
+            markets.write_bytes(markets.read_bytes() + b'\n')
+            with self.assertRaisesRegex(ValueError, 'differs'):
+                verify_bundled_catalog(app, source, require_complete=False)
+            markets.unlink()
+            with self.assertRaisesRegex(ValueError, 'differs'):
+                verify_bundled_catalog(app, source, require_complete=False)
 
     def test_regulator_identity_merge_preserves_current_ids_and_historical_aliases(self):
         current = record('us-nic-11', 'Example Community Credit Union', 'US', 'creditUnion', {'RSSD':'11', 'NCUA':'101'})
@@ -61,7 +92,7 @@ class FinancialCatalogTests(unittest.TestCase):
         catalog=json.loads(path.read_text());catalog['banks']=[bank for bank in catalog['banks'] if bank['country']!='GB']
         with tempfile.TemporaryDirectory() as directory:
             fixture=Path(directory)/'banks.json';fixture.write_text(json.dumps(catalog))
-            self.assertTrue(any('Source members' in issue for issue in inspect(fixture)['issues']))
+            self.assertTrue(any('Source members' in issue for issue in inspect(fixture, allow_legacy=True)['issues']))
 
     def test_completeness_flags_cannot_hide_missing_resources(self):
         path = Path(__file__).resolve().parent.parent / 'Sources/BudgetCore/Resources/banks.json'
@@ -72,14 +103,14 @@ class FinancialCatalogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Path(directory) / 'banks.json'
             fixture.write_text(json.dumps(catalog))
-            report = inspect(fixture)
+            report = inspect(fixture, allow_legacy=True)
             self.assertEqual(report['status'], 'incomplete')
             self.assertGreater(report['missingActiveLogos'], 0)
 
     def test_top_twenty_scope_allows_other_banks_without_logos(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.logo_fixture(directory)
-            report = inspect(fixture)
+            report = inspect(fixture, allow_legacy=True)
             self.assertEqual(report['status'], 'ready', report['issues'])
             self.assertEqual(report['verifiedRequiredLogos'], 60)
             self.assertGreater(report['missingActiveLogos'], 10000)
@@ -90,10 +121,14 @@ class FinancialCatalogTests(unittest.TestCase):
         shutil.copytree(source / 'BankLogos', root / 'BankLogos')
         catalog = json.loads((source / 'banks.json').read_text())
         brands = json.loads((source / 'bank-brands.json').read_text())
+        brands['scope'] = 'top20-per-market'
+        brands['targets'] = [target for target in brands['targets'] if target['country'] in ('RU', 'US', 'GB')]
         catalog['manifest']['namesComplete'] = True
         catalog['manifest']['logosComplete'] = True
         catalog['manifest']['coveredScopes'] += ['us_state_banks', 'us_state_credit_unions']
         catalog['manifest']['notes'] = []
+        catalog['manifest']['nameScope'] = 'top20-per-market'
+        catalog['manifest']['logoScope'] = 'top20-per-market'
         for target in brands['targets']: target.pop('usageReview', None)
         (root / 'bank-brands.json').write_text(json.dumps(brands))
         fixture = root / 'banks.json'; fixture.write_text(json.dumps(catalog))
@@ -103,7 +138,7 @@ class FinancialCatalogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.logo_fixture(directory)
             (fixture.parent / 'BankLogos/ru-sber.png').unlink()
-            report = inspect(fixture)
+            report = inspect(fixture, allow_legacy=True)
             self.assertEqual(report['missingRequiredLogos'], ['ru-cbr-1481'])
             self.assertEqual(report['status'], 'incomplete')
 
@@ -113,10 +148,10 @@ class FinancialCatalogTests(unittest.TestCase):
             path = fixture.parent / 'bank-brands.json'; brands = json.loads(path.read_text())
             brands['targets'][0]['bankID'] = brands['targets'][10]['bankID']
             path.write_text(json.dumps(brands))
-            self.assertTrue(any('sixty distinct' in issue for issue in inspect(fixture)['issues']))
+            self.assertTrue(any('sixty distinct' in issue for issue in inspect(fixture, allow_legacy=True)['issues']))
             brands['targets'][0]['bankID'] = 'ru-cbr-1481'; brands['targets'][0]['country'] = 'US'
             path.write_text(json.dumps(brands))
-            self.assertEqual(inspect(fixture)['status'], 'incomplete')
+            self.assertEqual(inspect(fixture, allow_legacy=True)['status'], 'incomplete')
 
     def test_twentieth_bank_in_each_market_is_mandatory(self):
         for market in ('RU', 'US', 'GB'):
@@ -125,7 +160,7 @@ class FinancialCatalogTests(unittest.TestCase):
                 brands = json.loads((fixture.parent / 'bank-brands.json').read_text())
                 target = next(item for item in brands['targets'] if item['country'] == market and item['rank'] == 20)
                 (fixture.parent / 'BankLogos' / target['logoResource']).unlink()
-                report = inspect(fixture)
+                report = inspect(fixture, allow_legacy=True)
                 self.assertEqual(report['status'], 'incomplete')
                 self.assertIn(target['bankID'], report['missingRequiredLogos'])
 
@@ -135,14 +170,14 @@ class FinancialCatalogTests(unittest.TestCase):
             catalog = json.loads(fixture.read_text())
             catalog['manifest']['nameScope'] = 'top10-per-market'
             fixture.write_text(json.dumps(catalog))
-            self.assertTrue(any('coverage scope' in issue for issue in inspect(fixture)['issues']))
+            self.assertTrue(any('coverage scope' in issue for issue in inspect(fixture, allow_legacy=True)['issues']))
 
     def test_logo_usage_review_is_not_waived_by_a_complete_flag(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.logo_fixture(directory)
             path = fixture.parent / 'bank-brands.json'; brands = json.loads(path.read_text())
             brands['targets'][0]['usageReview'] = 'pending'; path.write_text(json.dumps(brands))
-            self.assertTrue(any('usage review pending' in issue for issue in inspect(fixture)['issues']))
+            self.assertTrue(any('usage review pending' in issue for issue in inspect(fixture, allow_legacy=True)['issues']))
 
 
 if __name__ == '__main__':

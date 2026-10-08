@@ -14,6 +14,7 @@ import re
 import urllib.parse
 import urllib.request
 from bank_registry_formats import parse_nic, parse_ncua, parse_occ, parse_cbr_foreign, merge_regulator_records
+from world_bank_catalog import apply_rankings
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = {
@@ -158,32 +159,49 @@ def build(cache, allow_network, logos=None):
     banks = merge_regulator_records(banks)
     ids = [row['id'] for row in banks]
     if len(ids) != len(set(ids)): raise ValueError('Duplicate regulator identity')
+    resource = ROOT / 'Sources/BudgetCore/Resources'
+    rankings = json.loads((resource / 'bank-rankings.json').read_text())
+    markets = json.loads((resource / 'bank-markets.json').read_text())
+    coverage_notes = ['Дополнительный справочник не гарантирует полноту всех банков, включая учреждения США без федеральной страховки.']
+    covered = [scope for source, scope in [('CBR', 'ru_credit_institutions'), ('PRA', 'gb_pra'), ('FDIC', 'us_fdic')] if any(item['name'] == source and item['complete'] for item in sources)]
+    covered += [item['scope'] for item in sources if item.get('scope') and item['complete']]
+    if {'us_occ_national', 'us_occ_savings'}.issubset(covered): covered.append('us_occ')
+    manifest = dict(version=4, coverageNotes=coverage_notes, builtOn=today, sources=sources, coveredScopes=covered, namesComplete=False, logosComplete=False, notes=notes)
+    catalog = apply_rankings(dict(manifest=manifest, banks=banks), rankings, markets)
     approved = json.loads(logos.read_text()) if logos else {}
-    brands = json.loads((ROOT / 'Sources/BudgetCore/Resources/bank-brands.json').read_text())
+    brands = json.loads((resource / 'bank-brands.json').read_text())
     targets = {item['bankID']: item for item in brands['targets']}
-    for bank in banks:
+    for bank in catalog['banks']:
         target = targets.get(bank['id'])
         if target:
             bank['aliases'] = sorted(set(bank['aliases'] + [target['brand']]))
             bank['website'] = target['website']
         item = approved.get(bank['id'])
         if not item: continue
-        path = ROOT / 'Sources/BudgetCore/Resources/BankLogos' / item['resource']
-        if path.parent != ROOT / 'Sources/BudgetCore/Resources/BankLogos' or not path.is_file(): raise ValueError('Unsafe or missing local image')
+        path = resource / 'BankLogos' / item['resource']
+        if path.parent != resource / 'BankLogos' or not path.is_file(): raise ValueError('Unsafe or missing local image')
         if hashlib.sha256(path.read_bytes()).hexdigest() != item['sha256'] or not item.get('source') or not item.get('usage'): raise ValueError('Image is not verified')
         bank.update(logoResource=item['resource'], logoSource=item['source'], logoUsage=item['usage'], logoSHA256=item['sha256'], logoCheckedOn=item.get('checkedOn', today))
-    logo_complete = len(targets) == 60 and set(targets).issubset({bank['id'] for bank in banks if bank.get('logoResource')})
-    coverage_notes = ['Дополнительный справочник не гарантирует полноту всех банков, включая учреждения США без федеральной страховки.']
+        # Keep the original-mark provenance in regenerated catalogues as well as
+        # in the brand manifest. Only copy proof for this exact approved image.
+        if target and target.get('logoSHA256') == item['sha256'] and target.get('logoSource') == item['source']:
+            for field in ('logoSourcePage', 'logoSourcePageSHA256', 'logoOriginalSHA256',
+                          'logoAssociationURL', 'logoAssociationSHA256', 'logoAssociationBasis',
+                          'logoBankAssociationURL', 'logoBankAssociationSHA256'):
+                if target.get(field): bank[field] = target[field]
+    required_ids = {row['id'] for country, dataset in rankings['countries'].items()
+                    if next(m['requiresLogos'] for m in markets if m['id'] == country) for row in dataset['banks']}
+    branded_ids = {bank['id'] for bank in catalog['banks'] if bank.get('logoResource')}
+    retained_logo_ids = {identity for identity, target in targets.items() if target.get('logoResource')}
+    logo_complete = brands.get('scope') == rankings['scope'] and required_ids.issubset(targets) and (required_ids | retained_logo_ids).issubset(branded_ids) and not catalog['manifest']['notes']
+    catalog['manifest']['logosComplete'] = logo_complete
     if not logo_complete:
-        notes.append('Логотипы топ-20 каждого рынка: нужны проверенные ресурсы и основания использования; заглушки не засчитываются.')
+        catalog['manifest']['notes'].append('Логотипы обязательных стран: нужны все проверенные ресурсы; заглушки не засчитываются.')
     for target in targets.values():
-        if target.get('usageReview') == 'pending':
-            notes.append(target['brand'] + ': основание использования адаптированного логотипа в выпуске ещё не подтверждено.')
-    covered = [scope for source, scope in [('CBR', 'ru_credit_institutions'), ('PRA', 'gb_pra'), ('FDIC', 'us_fdic')] if any(item['name'] == source and item['complete'] for item in sources)]
-    covered += [item['scope'] for item in sources if item.get('scope') and item['complete']]
-    if {'us_occ_national', 'us_occ_savings'}.issubset(covered): covered.append('us_occ')
-    manifest = dict(version=3, nameScope='top20-per-market', coverageNotes=coverage_notes, builtOn=today, sources=sources, coveredScopes=covered, namesComplete=False, logosComplete=logo_complete, logoScope=brands['scope'], notes=notes)
-    return dict(manifest=manifest, banks=sorted(banks, key=lambda bank: (bank['country'], bank['id'])))
+        if target.get('usageReview') == 'pending' and (target['bankID'] in required_ids or target.get('logoResource')):
+            catalog['manifest']['notes'].append(target['brand'] + ': основание использования адаптированного логотипа в выпуске ещё не подтверждено.')
+    catalog['banks'].sort(key=lambda bank: (bank['country'], bank['id']))
+    return catalog
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument('--allow-network', action='store_true'); parser.add_argument('--cache', type=Path, required=True); parser.add_argument('--output', type=Path, default=ROOT / 'Sources/BudgetCore/Resources/banks.json'); parser.add_argument('--logos', type=Path)

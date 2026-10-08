@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from release_entitlements import verify_app_entitlements
+from verify_financial_catalog import verify_bundled_catalog
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
@@ -38,6 +39,7 @@ if tuple(int(part) for part in version.split('.')) >= (1, 3, 0):
     print(result.stdout)
     result.check_returncode()
     catalog_report = json.loads(result.stdout)
+    verify_bundled_catalog(args.app, root / 'Sources/BudgetCore/Resources', require_complete=not args.pre_release)
 if info['CFBundleIdentifier'] != 'com.mubudget.app' or info.get('NSFaceIDUsageDescription'):
     raise SystemExit('Not a production password-only BeeSave package.')
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(args.app)], check=True)
