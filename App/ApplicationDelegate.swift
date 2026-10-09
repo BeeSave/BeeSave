@@ -5,7 +5,16 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     weak var updater: InstallUpdateManager?
     weak var model: AppModel?
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        updater?.canTerminate() == false ? .terminateCancel : .terminateNow
+        guard updater?.canTerminate() != false else { return .terminateCancel }
+        guard let model, model.dailyBackupBusy else { return .terminateNow }
+        Task { @MainActor in
+            await model.waitForDailyBackup()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        BudgetWindows.reopen?(); BudgetWindows.bringForward(); return false
     }
     func applicationWillTerminate(_ notification: Notification) { model?.vault.close() }
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,6 +32,7 @@ extension ApplicationDelegate: UNUserNotificationCenterDelegate {
         let event = response.notification.request.content.userInfo["eventToken"] as? String
         Task { @MainActor in
             NSApp.activate(ignoringOtherApps: true)
+            BudgetWindows.reopen?()
             BudgetWindows.bringForward()
             if let token, let event { model?.pendingFinancialRoute = (token, event); model?.handleFinancialNotification() }
             completionHandler()

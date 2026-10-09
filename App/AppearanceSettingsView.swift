@@ -56,9 +56,9 @@ extension AppearanceColor {
 }
 
 private enum PaletteField: String, CaseIterable, Identifiable {
-    case backgroundStart = "Фон · начало", backgroundEnd = "Фон · конец", chrome = "Боковая панель", surface = "Карточки"
+    case backgroundStart = "Фон · начало", backgroundEnd = "Фон · конец", chrome = "Основа под навигацией", surface = "Карточки"
     case text = "Основной текст", muted = "Вторичный текст", accent = "Акцент", accentText = "Текст на акценте"
-    case onBackground = "Текст на фоне и в меню", backgroundMuted = "Подписи на фоне и в меню"
+    case onBackground = "Текст на фоне содержимого", backgroundMuted = "Подписи на фоне содержимого"
     var id: String { rawValue }
     var path: WritableKeyPath<AppearancePalette, AppearanceColor> {
         switch self {
@@ -105,7 +105,7 @@ struct AppearancePaletteEditor: View {
                     }
                     BeePicker("Основа системных элементов", selection: $dark) { Text("Светлая").tag(false); Text("Тёмная").tag(true) }.beePickerStyle(.menu)
                     PalettePreview(palette: candidate)
-                    Text("Цвета меняются в предпросмотре. Применение станет доступно, когда текст и элементы будут достаточно контрастными.")
+                    Text("Палитра задаёт содержимое и акценты. Материал навигации и его текст адаптирует macOS. Цвета меняются в предпросмотре. Применение станет доступно, когда текст и элементы будут достаточно контрастными.")
                         .beeFont(.caption).foregroundStyle(BeeStyle.muted)
                     ForEach(PaletteField.allCases) { field in
                         VStack(alignment: .leading, spacing: 6) {
@@ -136,7 +136,7 @@ struct AppearancePaletteEditor: View {
                 Button("Применить", action: apply).buttonStyle(BeePrimaryStyle()).disabled(!issues.isEmpty).keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("appearance.applyCustom")
             }.padding(20)
-        }.frame(width: 640, height: 650).foregroundStyle(BeeStyle.text).background(BeeStyle.surface)
+        }.beeSheet(width: 640, height: 650).foregroundStyle(BeeStyle.text).background(BeeStyle.surface)
             .tint(BeeStyle.text).beeAppearance().interactiveDismissDisabled(dirty)
             .modifier(UpdateFormGuard(active: true))
             .confirmationDialog("Применить изменения палитры?", isPresented: $closing) {
@@ -164,9 +164,8 @@ private struct PalettePreview: View {
                 HStack { Label("Доход", systemImage: "arrow.down.left").foregroundStyle(palette.positive.swiftUIColor); Label("Внимание", systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning.swiftUIColor) }.beeFont(.caption)
                 Label("Ошибка", systemImage: "xmark.circle").beeFont(.caption).foregroundStyle(palette.negative.swiftUIColor)
                 Text("Добавить расход").beeFont(.subheadline.weight(.semibold)).padding(10).foregroundStyle(palette.accentText.swiftUIColor).background(palette.accent.swiftUIColor, in: RoundedRectangle(cornerRadius: 8))
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(18).background(palette.surface.swiftUIColor, in: RoundedRectangle(cornerRadius: 14))
-                .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(palette.line.swiftUIColor) }
-                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(18).background(palette.surface.swiftUIColor, in: RoundedRectangle(cornerRadius: 20))
+                .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(palette.line.swiftUIColor.opacity(0.18)) }
         }.padding(18).background(LinearGradient(colors: [palette.backgroundStart.swiftUIColor, palette.backgroundEnd.swiftUIColor], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16))
             .accessibilityElement(children: .combine)
     }

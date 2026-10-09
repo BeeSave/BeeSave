@@ -23,9 +23,9 @@ struct FilterBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Button { filtersOpen = false; calendarOpen = true } label: { Label(CalendarDays.range(filters), systemImage: "calendar"); Image(systemName: "chevron.down") }
+                Button { filtersOpen = false; calendarOpen = true } label: { Label(CalendarDays.range(filters), systemImage: "calendar").beeFont(.body); Image(systemName: "chevron.down").beeFont(.caption) }
                     .popover(isPresented: $calendarOpen) { DateRangePopover(filters: $filters, narrow: narrow, close: { calendarOpen = false }) }
-                Button { calendarOpen = false; filtersOpen = true } label: { Label("Фильтры", systemImage: "slider.horizontal.3"); let count = FilterDraft(countFilters).activeCount; if count > 0 { Text("\(count)").beeFont(.caption.bold()) } }
+                Button { calendarOpen = false; filtersOpen = true } label: { Label("Фильтры", systemImage: "slider.horizontal.3").beeFont(.body); let count = FilterDraft(countFilters).activeCount; if count > 0 { Text("\(count)").beeFont(.caption.bold()) } }
                     .popover(isPresented: $filtersOpen) { FilterPanel(filters: $filters, showParticipation: showParticipation, allowCategoryProject: allowCategoryProject, kind: kind, kinds: kinds, fixedAccount: fixedAccount, operationIDs: operationIDs, resetPeriod: resetPeriod, narrow: narrow, close: { filtersOpen = false }) }
                 Spacer()
             }
@@ -68,7 +68,7 @@ struct DateRangePopover: View {
             Text(draft.start == nil && draft.end == nil ? "Без ограничения дат" : "Границы включены в период").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             HStack { Spacer(); Button("Отмена", action: close).keyboardShortcut(.cancelAction); Button("Применить") { do { filters = try draft.apply(to: filters); close() } catch { self.error = error.localizedDescription } }.buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(draft.choosingEnd) }
 
-        }.padding(20).frame(width: narrow ? 350 : 620).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).onAppear { draft = DateRangeDraft(start: filters.start, end: filters.end); month = (filters.start ?? .today).firstOfMonth }
+        }.padding(20).frame(width: narrow ? 350 : 620).foregroundStyle(.primary).onAppear { draft = DateRangeDraft(start: filters.start, end: filters.end); month = (filters.start ?? .today).firstOfMonth }
     }
     private func navigate(_ day: Day) { if day < month { month = day.firstOfMonth }; if day >= CalendarDays.month(month, offset: narrow ? 1 : 2) { month = day.firstOfMonth }; dayFocus = day }
     private func boundary(_ title: String, day: Binding<Day?>) -> some View {
@@ -158,7 +158,7 @@ struct FilterPanel: View {
             HStack { Text(count.map { "Найдено \(allowCategoryProject ? "записей" : "счетов"): \($0)" } ?? "Проверяем выборку…").beeFont(.caption).foregroundStyle(BeeStyle.muted); Spacer(); Button("Сбросить") { draft.reset(today: .today, fixedAccount: fixedAccount, period: resetPeriod) } }
             HStack { Spacer(); Button("Отмена", action: close).keyboardShortcut(.cancelAction); Button("Применить") { do { guard let db = model.db else { return }; filters = try draft.apply(database: db, fixedAccount: fixedAccount); close() } catch { self.error = error.localizedDescription } }.buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction) }
 
-        }.padding(20).frame(width: narrow ? 390 : 650).foregroundStyle(BeeStyle.text).background(BeeStyle.surface)
+        }.padding(20).frame(width: narrow ? 390 : 650).foregroundStyle(.primary)
             .onAppear { draft = FilterDraft(filters); updateCount() }.onChange(of: draft.value) { updateCount() }.onChange(of: model.db?.revision) { updateCount() }.onDisappear { countTask?.cancel() }
     }
     private func membership(_ id: UUID, set: Binding<Set<UUID>>) -> Binding<Bool> { Binding(get: { set.wrappedValue.contains(id) }, set: { if $0 { set.wrappedValue.insert(id) } else { set.wrappedValue.remove(id) } }) }

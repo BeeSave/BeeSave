@@ -14,7 +14,7 @@ struct FinancialNotificationStatus {
     static func enable(model: AppModel) async {
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-            guard granted else { model.notice = "Системные уведомления выключены. Все события доступны в финансовом календаре."; return }
+            guard granted else { model.showNotice("Системные уведомления выключены. Все события доступны в финансовом календаре.", kind: .warning); return }
             try model.commit { db in var book = db.financeData; book.reminders.systemEnabled = true; db.finances = book }
         } catch { model.error = error.localizedDescription }
     }
@@ -56,12 +56,12 @@ struct FinancialNotificationStatus {
             let confirmed = await center.pendingNotificationRequests()
             guard generation == current else { return nil }
             let confirmedIDs = Set(confirmed.map(\.identifier))
-            guard wanted.isSubset(of: confirmedIDs) else { throw BudgetError.storage("macOS не подтвердила часть расписания. Откройте финансовый календарь и повторите пересчёт.") }
+            guard wanted.isSubset(of: confirmedIDs) else { throw BudgetError.storage("macOS не подтвердила часть расписания. Откройте календарь и повторите пересчёт.") }
             let through = all.count > 60 ? all[60].fireAt.addingTimeInterval(-1) : now.addingTimeInterval(45 * 86400)
             return FinancialNotificationStatus(message: all.count > 60 ? "Очередь заполнена. Следующие события доступны в календаре; откройте бюджет до конца покрытия." : "Расписание проверено в macOS. Открывайте бюджет для продления покрытия.", scheduledThrough: through, pendingCount: wanted.count)
         } catch {
             guard generation == current else { return nil }
-            return FinancialNotificationStatus(message: "Расписание системных уведомлений не подтверждено. Финансовый календарь доступен.", error: error.localizedDescription)
+            return FinancialNotificationStatus(message: "Расписание системных уведомлений не подтверждено. Календарь доступен.", error: error.localizedDescription)
         }
         #endif
     }

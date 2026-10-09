@@ -45,6 +45,27 @@ final class FinancialAccountTests: XCTestCase {
         try FinancialLedger.payDebt(contractID: contract.id, from: cash.id, amount: 2_100_000, date: day("2024-01-04"), in: &db)
         XCTAssertEqual(try FinancialLedger.debt(accountID: contract.accountID, db: db).ownFunds, 100_000)
     }
+    func testDebtReportPreservesIncomingTransfersChargesAndArchivedHistory() throws {
+        var (db, contract, cash) = try fixture(.termLoan, principal: 1_000_000)
+        let paymentDate = try day("2024-02-01")
+        try FinancialLedger.payDebt(contractID: contract.id, from: cash.id, amount: 100_000, interestCharge: 10_000, date: paymentDate, in: &db)
+        let accountIndex = try XCTUnwrap(db.accounts.firstIndex { $0.id == contract.accountID })
+        db.accounts[accountIndex].archived = true
+        var report = Report(name: "Debt regression")
+        report.dataset = .debt; report.grouping = .account; report.currency = "RUB"
+        for metric in [Metric.balance, .principal, .interest, .fees] {
+            report.metric = metric
+            for date in [try day("2024-01-31"), paymentDate] {
+                report.filters.end = date
+                let debt = try FinancialLedger.debt(accountID: contract.accountID, db: db, on: date)
+                let expected = metric == .principal ? debt.amount(.principal) : metric == .interest ? debt.amount(.interest) : metric == .fees ? try Money.add(debt.amount(.fee), debt.amount(.penalty)) : debt.debt
+                let rows = try FinancialReports.rows(report, db: db)
+                XCTAssertEqual(rows.count, 1)
+                XCTAssertEqual(rows[0].accountIDs, [contract.accountID])
+                XCTAssertEqual(rows[0].value.known, expected)
+            }
+        }
+    }
     func testDailyDepositAndConfirmationAndDuplicateProtection() throws {
         var (db, contract, _) = try fixture(.deposit, principal: 100_000_000, end: "2024-01-31", basis: .actual365)
         contract.frequency = .maturity; contract.terms[0].deposit.capitalize = true; try FinancialLedger.saveContract(contract, in: &db)

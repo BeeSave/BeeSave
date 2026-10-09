@@ -2,9 +2,12 @@ import Foundation
 
 public enum Backups {
     public static func write(store: VaultStore, folder: URL, kind: String, now: Date = Date()) throws -> URL {
+        try write(snapshot: store.snapshot(), folder: folder, kind: kind, now: now)
+    }
+    public static func write(snapshot: VaultSnapshot, folder: URL, kind: String, now: Date = Date()) throws -> URL {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let name = kind == "daily" ? "daily-\(Day.local(now)).mubak" : "service-\(Int(now.timeIntervalSince1970))-\(UUID().uuidString).mubak"
-        let url = folder.appendingPathComponent(name); try store.backup(to: url)
+        let url = folder.appendingPathComponent(name); try snapshot.backup(to: url)
         // Rotate only the application's own daily/service files after the new copy was verified.
         let prefix = kind == "daily" ? "daily-" : "service-"; let limit = kind == "daily" ? 30 : 10
         let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey]).filter { $0.lastPathComponent.hasPrefix(prefix) && $0.pathExtension == "mubak" }.sorted { a, b in (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast) ?? .distantPast > (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast) ?? .distantPast }

@@ -5,7 +5,7 @@ import BudgetCore
 import BudgetPresentation
 
 enum SectionID: String, CaseIterable, Identifiable {
-    case dashboard = "Главная", accounts = "Мои счета", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", references = "Справочники", financialCalendar = "Финансовый календарь"
+    case dashboard = "Главная", accounts = "Мои счета", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", references = "Справочники", financialCalendar = "Календарь"
     var id: String { rawValue }
     var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .references: "books.vertical"; case .financialCalendar: "calendar" } }
 }
@@ -22,7 +22,39 @@ struct SheetRoute: Identifiable {
     @Published var previewAppearance: ColorScheme? = nil
     @Published var previewScenario = PreviewScenario.filled
     #endif
-    @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var section = SectionID.dashboard; @Published var sheet: SheetRoute?; @Published var historyAccount: UUID?; @Published var error: String?; @Published var backupError: String?; @Published var notice: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var startupError: String?
+    @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var section = SectionID.dashboard; @Published var sheet: SheetRoute?; @Published var historyAccount: UUID?; @Published var error: String?; @Published var backupError: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var startupError: String?
+    @Published var noticeMessage: AppNotice?
+    @Published var rateError: String?
+    private var noticeTask: Task<Void, Never>?
+    private var dailyBackupTask: Task<Void, Never>?
+    private var dailyBackupID = UUID()
+    @Published private(set) var dailyBackupBusy = false
+    private let noticeWindows = NSHashTable<NSWindow>.weakObjects()
+    func registerNoticeWindow(_ window: NSWindow) { noticeWindows.add(window) }
+    var notice: String? {
+        get { noticeMessage?.text }
+        set { if let text = newValue { showNotice(text) } else { noticeTask?.cancel(); noticeMessage = nil } }
+    }
+    func showNotice(_ text: String, kind: NoticeKind = .information) {
+        noticeTask?.cancel()
+        let voiceOver = NSWorkspace.shared.isVoiceOverEnabled
+        let message = AppNotice(text, kind: kind, duration: voiceOver ? 12 : 4)
+        noticeMessage = message
+        if voiceOver {
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+        }
+        guard message.transient else { return }
+        noticeTask = Task { [weak self] in
+            var current = message
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+                guard let self, self.noticeMessage?.id == message.id else { return }
+                let visible = NSApp.isActive && NSApp.keyWindow.map(self.noticeWindows.contains) == true && self.db != nil
+                if current.elapse(0.25, token: message.id, visible: visible) { self.noticeMessage = nil; return }
+            }
+        }
+    }
     @Published var financialEvents: [UUID: [FinanceEvent]] = [:]
     @Published var financialDebts: [UUID: DebtSummary] = [:]
     @Published var financialErrors: [UUID: String] = [:]
@@ -41,7 +73,7 @@ struct SheetRoute: Identifiable {
     var notificationQAActive = false
     #endif
     var updateBlocker: String? {
-        if busy || rateBusy { return "Дождитесь завершения записи или обновления курсов." }
+        if busy || rateBusy || dailyBackupBusy { return "Дождитесь завершения записи, резервного копирования или обновления курсов." }
         if sheet != nil || !updateForms.isEmpty { return "Сохраните или закройте открытые формы во всех окнах BeeSave." }
         if NSApplication.shared.modalWindow != nil || NSApplication.shared.windows.contains(where: { $0.attachedSheet != nil }) {
             return "Завершите открытый диалог BeeSave перед установкой обновления."
@@ -96,13 +128,16 @@ struct SheetRoute: Identifiable {
         } }
     }
     func lock() {
+        dailyBackupID = UUID(); dailyBackupTask?.cancel(); dailyBackupTask = nil; dailyBackupBusy = false
+        BudgetWindows.hideSensitiveWindows()
+        rateError = nil
         cancelFinancialForecasts(); financialEvents = [:]; financialDebts = [:]; financialErrors = [:]; financialNotificationStatus = nil
         rateTask?.cancel(); rateTask = nil; rateBusy = false; sheet = nil; historyAccount = nil; drilldown = nil; showGettingStarted = false; settingsTask = .general; error = nil; notice = nil; backupError = nil; db = nil; vault.close(); sessionHidden = true
     }
     func resumeSession() {
         guard sessionHidden else { return }; sessionHidden = false
     }
-    func didUnlock() { db = vault.db; bootstrap = vault.bootstrap; startupError = nil; failures = 0; retryAt = nil; sessionHidden = false; activity(); confirmUpdatedBudget?(); refreshRates(automatic: true); refreshFinancialForecasts() }
+    func didUnlock() { dailyBackupID = UUID(); dailyBackupTask?.cancel(); dailyBackupTask = nil; dailyBackupBusy = false; BudgetWindows.sessionUnlocked(); error = nil; db = vault.db; bootstrap = vault.bootstrap; startupError = nil; failures = 0; retryAt = nil; sessionHidden = false; activity(); confirmUpdatedBudget?(); refreshRates(automatic: true); refreshFinancialForecasts() }
     func unlock(password: String) {
         guard !busy else { return }; guard retryAt == nil || Date() >= retryAt! else { error = "Подождите 30 секунд после пяти ошибочных попыток."; return }
         busy = true; defer { busy = false }
@@ -126,9 +161,65 @@ struct SheetRoute: Identifiable {
         try requireWritableSession()
         guard !busy else { throw BudgetError.storage("Дождитесь завершения текущей записи.") }; busy = true; defer { busy = false }
         try vault.transaction(mutation); db = vault.db; activity()
-        let folder = backupFolder; let scope = folder.startAccessingSecurityScopedResource(); defer { if scope { folder.stopAccessingSecurityScopedResource() } }
-        do { try Backups.daily(store: vault, folder: folder); db = vault.db; backupError = nil } catch { backupError = "Автокопия не создана: " + error.localizedDescription }
+        scheduleDailyBackup()
         refreshFinancialForecasts()
+    }
+    private func scheduleDailyBackup() {
+        guard dailyBackupTask == nil, let database = db, database.settings.lastDaily != .today else { return }
+        let id = UUID(), folder = backupFolder, now = Date(), day = Day.today
+        dailyBackupID = id; dailyBackupBusy = true
+        do {
+            let snapshot = try vault.snapshot()
+            dailyBackupTask = Task { [weak self] in
+                do {
+                    // Let the saved change finish its first layout/paint before
+                    // starting another large encode/decode on the same machine.
+                    try await Task.sleep(for: .milliseconds(250))
+                    let worker = Task.detached(priority: .utility) {
+                        try Task.checkCancellation()
+                        let scope = folder.startAccessingSecurityScopedResource()
+                        defer { if scope { folder.stopAccessingSecurityScopedResource() } }
+                        _ = try Backups.write(snapshot: snapshot, folder: folder, kind: "daily", now: now)
+                        try Task.checkCancellation()
+                    }
+                    try await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
+                    let completedAt = Date()
+                    while !Task.isCancelled {
+                        guard let self, self.dailyBackupID == id, self.db?.id == database.id else { return }
+                        guard self.backupFolder == folder else { break }
+                        let latest = try self.vault.snapshot()
+                        let preparation = Task.detached(priority: .utility) {
+                            try Task.checkCancellation()
+                            return try latest.recordingDailyBackup(day: day, completedAt: completedAt)
+                        }
+                        let prepared = try await withTaskCancellationHandler(operation: { try await preparation.value }, onCancel: { preparation.cancel() })
+                        try Task.checkCancellation()
+                        guard self.dailyBackupID == id, self.db?.id == database.id else { return }
+                        guard self.backupFolder == folder else { break }
+                        if try self.vault.applyBackupStamp(prepared) {
+                            self.db = self.vault.db; self.backupError = nil
+                            self.refreshFinancialForecasts()
+                            break
+                        }
+                        await Task.yield()
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    if let self, self.dailyBackupID == id {
+                        self.backupError = "Автокопия не создана: " + error.localizedDescription
+                    }
+                }
+                guard let self, self.dailyBackupID == id else { return }
+                self.dailyBackupTask = nil; self.dailyBackupBusy = false
+                if self.db?.id == database.id, self.backupFolder != folder { self.scheduleDailyBackup() }
+            }
+        } catch {
+            dailyBackupBusy = false; backupError = "Автокопия не создана: " + error.localizedDescription
+        }
+    }
+    func waitForDailyBackup() async {
+        while let task = dailyBackupTask { await task.value }
     }
     func perform(_ mutation: (inout Database) throws -> Void) { do { try commit(mutation) } catch { self.error = error.localizedDescription } }
     func newOperation(_ kind: OperationKind, account: UUID? = nil) { guard !updateFrozen, !updateVerificationPending else { return }; sheet = SheetRoute(kind: .operation, operationKind: kind, accountContext: account ?? historyAccount) }
@@ -152,8 +243,8 @@ struct SheetRoute: Identifiable {
                 }
                 try Task.checkCancellation(); guard self.db != nil, !self.updateFrozen, !self.updateVerificationPending else { return }
                 try self.vault.transaction { db in for r in values { db.rates.removeAll { $0.base == r.base && $0.quote == r.quote && $0.date == r.date && $0.provider == r.provider }; db.rates.append(r) }; db.settings.lastRateCheck = Date() }
-                self.db = self.vault.db; self.refreshFinancialForecasts(); self.notice = "Справочные курсы обновлены. Даты и источники доступны в настройках."
-            } catch is CancellationError {} catch { if self.db != nil { self.notice = "Курсы не обновлены: " + error.localizedDescription + " Кеш сохранён; доступен ручной курс." } }
+                self.db = self.vault.db; self.refreshFinancialForecasts(); self.rateError = nil; self.showNotice("Курсы обновлены", kind: .success)
+            } catch is CancellationError {} catch { if self.db != nil { let message = "Курсы не обновлены: " + error.localizedDescription + " Кеш сохранён; доступен ручной курс."; self.rateError = message; self.showNotice(message, kind: .warning) } }
         }
     }
     func exportCSV(selection: [BudgetCore.Operation]? = nil, filters: Filters? = nil) {
@@ -236,7 +327,7 @@ extension AppModel {
             if scenario != .new {
                 let sample = try PreviewFixtures.database(scenario); let key = try VaultCrypto.random(); let recovery = try VaultCrypto.random()
                 let b = Bootstrap(databaseID: sample.id, password: try VaultCrypto.wrapPassword(key, password: "UI fixture password only"), recovery: try VaultCrypto.seal(key, key: recovery, context: VaultCrypto.recoveryContext))
-                try vault.initialize(db: sample, dataKey: key, bootstrap: b); db = vault.db; bootstrap = b
+                try vault.initialize(db: sample, dataKey: key, bootstrap: b); BudgetWindows.sessionUnlocked(); db = vault.db; bootstrap = b
             }
             notice = "Тестовое окно · вымышленные данные · отдельная временная база"; refreshFinancialForecasts()
         } catch { startupError = error.localizedDescription }

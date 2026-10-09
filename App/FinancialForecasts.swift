@@ -5,9 +5,9 @@ extension AppModel {
     func handleFinancialNotification() {
         guard let route = pendingFinancialRoute, let db, !financialBusy, !updateFrozen else { return }
         pendingFinancialRoute = nil
-        guard route.0 == FinancialReminderPlanner.databaseToken(db.id), let event = financialEvents.values.flatMap({ $0 }).first(where: { $0.id == route.1 }), !event.isFulfilled else { notice = "Напоминание больше не актуально. Проверьте финансовый календарь."; return }
+        guard route.0 == FinancialReminderPlanner.databaseToken(db.id), let event = financialEvents.values.flatMap({ $0 }).first(where: { $0.id == route.1 }), !event.isFulfilled else { showNotice("Напоминание больше не актуально. Проверьте финансовый календарь.", kind: .warning); return }
         // A payment detail has no draft and may be replaced by the next reminder.
-        guard (sheet == nil || sheet?.kind == .scheduledDetail) && updateForms.isEmpty else { notice = "Финансовое событие доступно в календаре после завершения открытой формы."; return }
+        guard (sheet == nil || sheet?.kind == .scheduledDetail) && updateForms.isEmpty else { showNotice("Финансовое событие доступно в календаре после завершения открытой формы.", kind: .warning); return }
         if event.kind == .scheduledPayment {
             guard db.financeData.scheduledPayments?.contains(where: { $0.id == event.contractID && !$0.cancelled }) == true else { return }
             section = .expenses; showScheduledExpenses = true; sheet = SheetRoute(kind: .scheduledDetail, entityID: event.contractID); return
@@ -22,6 +22,9 @@ extension AppModel {
         guard let snapshot = db else { return }
         let calculation = UUID(); financialCalculationID = calculation; financialBusy = true
         financialTask = Task {
+            // Coalesce rapid edits and let the committed facts paint before a
+            // large projection competes with the window's first layout.
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             let worker = Task.detached(priority: .userInitiated) { () -> ([UUID: [FinanceEvent]], [UUID: String], [UUID: DebtSummary]) in
                 var events: [UUID: [FinanceEvent]] = [:], errors: [UUID: String] = [:], debts: [UUID: DebtSummary] = [:]
                 let operations = FinancialLedger.operationsByAccount(in: snapshot)

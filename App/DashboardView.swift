@@ -39,7 +39,10 @@ struct DashboardView: View {
                 }
             }
             if !db.accounts.isEmpty && !model.showGettingStarted {
-                VStack(alignment: .leading, spacing: 14) { FilterBar(filters: filters, kinds: [.expense, .income]); CurrencyPicker(title: "Валюта сводки", selection: currency, compact: true) }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 20) { FilterBar(filters: filters, kinds: [.expense, .income]); CurrencyPicker(title: "Валюта", selection: currency, compact: true).fixedSize() }
+                    VStack(alignment: .leading, spacing: 12) { FilterBar(filters: filters, kinds: [.expense, .income]); CurrencyPicker(title: "Валюта", selection: currency, compact: true) }
+                }
             }
             FinancialDashboardSummary()
             ScheduledDashboardSummary()
@@ -75,7 +78,7 @@ struct DashboardBlockView: View {
                 if block.ownFilters != nil { Button("Использовать общие фильтры") { model.perform { db in if let index = db.dashboard.firstIndex(where: { $0.id == block.id }) { db.dashboard[index].ownFilters = nil } } } }
                 if let id = block.reportID { Button("Открыть отчёт") { model.sheet = SheetRoute(kind: .reportView, entityID: id) } }
             } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(BeeStyle.muted).frame(width: 28)
-                .popover(isPresented: $ownOpen) { VStack(alignment: .leading, spacing: 14) { Text("Фильтры блока").beeFont(.headline); FilterBar(filters: $own); HStack { Button("Отмена") { ownOpen = false }.keyboardShortcut(.cancelAction); Button("Сохранить") { model.perform { db in if let index = db.dashboard.firstIndex(where: { $0.id == block.id }) { db.dashboard[index].ownFilters = own } }; ownOpen = false }.buttonStyle(BeePrimaryStyle()) } }.padding(20).frame(width: 400).foregroundStyle(BeeStyle.text).background(BeeStyle.surface) }
+                .popover(isPresented: $ownOpen) { VStack(alignment: .leading, spacing: 14) { Text("Фильтры блока").beeFont(.headline); FilterBar(filters: $own); HStack { Button("Отмена") { ownOpen = false }.keyboardShortcut(.cancelAction); Button("Сохранить") { model.perform { db in if let index = db.dashboard.firstIndex(where: { $0.id == block.id }) { db.dashboard[index].ownFilters = own } }; ownOpen = false }.buttonStyle(BeePrimaryStyle()) } }.padding(20).frame(width: 400).foregroundStyle(.primary) }
             }
             if let own = block.ownFilters { Label("Свой фильтр · " + CalendarDays.range(own), systemImage: "line.3.horizontal.decrease").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
             content(db: db, filters: block.ownFilters ?? db.settings.dashboardFilters)

@@ -484,7 +484,7 @@ struct FinancialCalendarView: View {
     var body: some View {
         let rows = ordered
         ScrollView { LazyVStack(alignment: .leading, spacing: 18) {
-            SectionHeading(title: "Финансовый календарь") { Button("Запланировать расход") { model.sheet = SheetRoute(kind: .scheduledPayment) }; Toggle("Исполненные", isOn: $includeFulfilled).toggleStyle(.checkbox); Button("Пересчитать") { model.refreshFinancialForecasts() }; if model.financialBusy { ProgressView().controlSize(.small); Button("Отмена") { model.cancelFinancialForecasts() } } }
+            SectionHeading(title: "Календарь") { Button("Запланировать расход") { model.sheet = SheetRoute(kind: .scheduledPayment) }; Toggle("Исполненные", isOn: $includeFulfilled).toggleStyle(.checkbox); Button("Пересчитать") { model.refreshFinancialForecasts() }; if model.financialBusy { ProgressView().controlSize(.small); Button("Отмена") { model.cancelFinancialForecasts() } } }
             BeePicker("События", selection: $scope) { Text("Все").tag(0); Text("Финансовые счета").tag(1); Text("Запланированные расходы").tag(2) }.beePickerStyle(.segmented)
             Text("Планируемые суммы не входят в фактические доходы, расходы и остатки. Минимальный платёж и погашение для льготы могут относиться к одному долгу.").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted)
             DisclosureGroup("Фильтры календаря") {
@@ -742,7 +742,7 @@ struct FinancialScenarioView: View {
     @State private var error = ""
     @State private var busy = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        ScrollView { VStack(alignment: .leading, spacing: 18) {
             HStack { Text("Сценарий").beeFont(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() } }
             DayField(title: "Дата досрочного погашения", value: $date)
             if contract.kind == .revolvingCredit { DayField(title: "Планируемая полная оплата", value: $paymentDate) }
@@ -752,7 +752,7 @@ struct FinancialScenarioView: View {
             if let cost = creditCost { FinanceValue(title: "Дополнительные проценты", amount: cost.interest, currency: currency); FinanceValue(title: "Комиссии", amount: cost.fees, currency: currency); Text(cost.accuracy.title).beeFont(.caption); ForEach(cost.notes, id: \.self) { Text($0).beeFont(.caption) } }
             ForEach(results.indices, id: \.self) { index in VStack(alignment: .leading, spacing: 8) { Text(index == 0 ? "Уменьшить срок" : "Уменьшить платёж").beeFont(.headline); FinanceValue(title: "Оставшиеся проценты", amount: results[index].remainingInterest, currency: currency); FinanceValue(title: "Комиссия досрочного погашения", amount: results[index].fee, currency: currency); Text("Окончание: " + (results[index].end?.rawValue ?? "Неизвестно") + " · " + results[index].accuracy.title).beeFont(.caption) }.beeCard() }
             Text("Сценарий не меняет историю и не подтверждает будущие операции.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
-        }.padding(24).frame(width: 620)
+        }.padding(24) }.beeSheet(width: 620, height: 650).beeWindow()
     }
     private var currency: String { (try? model.db?.account(contract.accountID).currency) ?? "RUB" }
     private func calculate() {
@@ -770,7 +770,7 @@ struct FinancialDashboardSummary: View {
         if let db = model.db, !db.financeData.contracts.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack { Text("Финансовые счета").beeFont(.headline); Spacer(); Button("Календарь") { model.section = .financialCalendar } }
-                let events = model.financialEvents.values.flatMap { $0 }.filter { !$0.isFulfilled && $0.kind != .scheduledPayment }.sorted { $0.date < $1.date }
+                let events = upcomingEvents()
                 let debtRows = debt(db)
                 if let total = try? Reports.total(debtRows) { Text("Задолженность: " + BeeFormat.valuation(total, currency: db.settings.reportCurrency)).beeFont(.title3).monospacedDigit() }
                 ForEach(Array(events.prefix(3))) { event in
@@ -782,6 +782,18 @@ struct FinancialDashboardSummary: View {
                 Text("Долг включает архивные счета. Предстоящие суммы показаны отдельно от фактических расходов.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             }.beeCard()
         }
+    }
+    private func upcomingEvents() -> [FinanceEvent] {
+        var nearest: [FinanceEvent] = []
+        for rows in model.financialEvents.values {
+            for event in rows where !event.isFulfilled && event.kind != .scheduledPayment {
+                if let index = nearest.firstIndex(where: { $0.date > event.date }) {
+                    nearest.insert(event, at: index)
+                    if nearest.count > 3 { nearest.removeLast() }
+                } else if nearest.count < 3 { nearest.append(event) }
+            }
+        }
+        return nearest
     }
     private func debt(_ db: Database) -> [ReportRow] { var report = Report(name: "Долг"); report.dataset = .debt; report.metric = .balance; report.grouping = .account; report.filters = Filters(); report.currency = db.settings.reportCurrency; return (try? FinancialReports.rows(report, db: db)) ?? [] }
 }

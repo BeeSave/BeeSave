@@ -1,56 +1,23 @@
 # BeeSave
 
-Локальный учёт личных финансов для macOS 26 и новее на Apple Silicon.
-Бюджет и полные резервные копии шифруются; обычный вход выполняется по паролю.
-Версия приложения в этом исходном дереве: 1.5.0/build 14.
+Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-Доступны счета и операции, бюджеты, отчёты, депозиты, кредитные карты и ипотека.
-Можно задать ставки, сроки, график выплат, подтвердить фактический платёж и
-просмотреть предстоящие события. Прогнозы зависят от введённых условий договора.
-В каталоге представлены 20 крупнейших экономик по номинальному ВВП и дополнительные страны.
-Страны основной валюты показываются первыми, внутри страны сначала идут крупнейшие банки.
-Поиск, ручное добавление и готовые логотипы доступны без подключения к сети.
+BeeSave 1.6 adds a native Liquid Glass interface, a compact unlock window, a larger workspace, and brief notifications that disappear automatically.
 
-Запланированные расходы и рассрочка имеют обязательные название и комментарий,
-отдельные даты и несколько напоминаний. До подтверждения оплаты план не меняет
-остатки. Поддерживаются частичные оплаты и связь с уже внесённым расходом.
-Системные напоминания нейтральны; очередь пополняется при открытии бюджета.
+BeeSave brings your accounts, income, expenses, transfers, budgets, and reports together in one place. It supports multiple currencies, CSV import and export, encrypted storage, and full backups.
 
-## Оформление
+## Install
 
-В «Настройки → Внешний вид» доступны размеры текста 100, 110, 125, 140 и 160%.
-Масштаб применяется к меню, суммам, таблицам и формам сразу.
-Выберите BeeSave (следует светлому или тёмному режиму macOS), тёмно-синюю
-«Полночь» с оранжевым акцентом, светлую «Сепию» или собственную палитру.
+Download a ready-to-use version from [GitHub Releases](https://github.com/BeeSave/BeeSave/releases/latest). Before replacing an existing installation, save a full backup of your budget and quit BeeSave. Open the supplied DMG, or extract the ZIP, and move `BeeSave.app` to your Applications folder.
 
-В редакторе своей темы можно начать с готовой основы, задать цвета через HEX
-или выбор цвета и проверить результат в предпросмотре. Недостаточно контрастные
-сочетания блокируют применение. Изменения сохраняются после «Применить»;
-«Отмена» сохраняет прежнее оформление.
+## Build
 
-Оформление доступно до входа и хранится на этом Mac отдельно от бюджета.
-Оно не переносится с CSV или финансовой резервной копией. Сброс оформления
-возвращает стандартную тему и размер текста, сохраняя финансовые данные.
+Open `BeeSave.xcodeproj` in Xcode, select the `BeeSave` scheme, and build for macOS. Configure signing for your own Apple Development team.
 
-## Установка и копии
-
-Готовые установочные файлы публикуются в [GitHub Releases](https://github.com/BeeSave/BeeSave/releases).
-Откройте DMG и перенесите BeeSave в Applications. Перед обновлением сохраните
-полную зашифрованную копию. Новая версия переводит базу на схему 3 с проверенной
-исходной копией; для возврата к старому приложению используйте копию его схемы.
-
-## Сборка
-
-Нужны macOS, Xcode с SDK macOS 26+ и локальная Apple Development identity.
-Argon2 и Sparkle закреплены в Vendor; лицензии включены в поставку.
+To check the core and presentation packages:
 
 ```sh
-swift test --disable-sandbox --scratch-path /private/tmp/BeeSaveTests
-python3 scripts/generate_project.py
-xcodebuild -project BeeSave.xcodeproj -scheme BeeSave -configuration Release \
-  -destination 'generic/platform=macOS' -derivedDataPath /private/tmp/BeeSaveRelease build
+swift test
 ```
 
-Конфигурация UISmoke использует отдельную временную базу с вымышленными данными.
-Тестовое меню отсутствует в Release. Упаковка и проверка подписанных установочных
-файлов выполняются инструментами в scripts; приватные ключи не экспортируются.
+Application sources are in `App/`, the accounting core is in `Sources/BudgetCore/`, and presentation code is in `Sources/BudgetPresentation/`. Dependencies and their licenses are in `Vendor/`; third-party notices are in `App/Resources/ThirdPartyNotices.txt`.

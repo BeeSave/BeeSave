@@ -4,20 +4,6 @@ build/
 *.xcuserstate
 xcuserdata/
 .DS_Store
-Dist/*.zip
-Dist/*.sha256
-Dist/*.json
-Dist/*.dmg
-Dist/*.xml
-Verification/*.log
-
-# Local project instructions and SDD materials; tracked files need separate exclusion before publishing.
-/AGENTS.md
-/SPEC.md
-/PLAN.md
-/ACCEPTANCE.md
-/BeeSave APP.md
-/specs/
-/Verification/
-/RELEASES.md
-/Design/
+Dist/
+__pycache__/
+*.pyc

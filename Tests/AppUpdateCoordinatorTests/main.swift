@@ -62,11 +62,21 @@ private struct Transport: AppUpdateTransport {
         let budgetWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
         let otherBudgetWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
         let settingsWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
+        BudgetWindows.sessionUnlocked()
         BudgetWindows.register(budgetWindow); BudgetWindows.register(otherBudgetWindow)
         check(BudgetWindows.preferred(ordered: [settingsWindow, budgetWindow, otherBudgetWindow], key: settingsWindow) === budgetWindow,
               "notification selects the budget window over foreground settings")
         check(BudgetWindows.preferred(ordered: [budgetWindow, otherBudgetWindow], key: otherBudgetWindow) === otherBudgetWindow,
               "notification preserves the active budget window")
+        let accessWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
+        BudgetWindows.register(accessWindow, role: .access)
+        BudgetWindows.hideSensitiveWindows()
+        check(BudgetWindows.preferred(ordered: [budgetWindow, accessWindow], key: budgetWindow) === accessWindow,
+              "locked session never raises a registered workspace window")
+        BudgetWindows.sessionUnlocked()
+        check(BudgetWindows.preferred(ordered: [accessWindow, budgetWindow], key: accessWindow) === budgetWindow,
+              "unlocked session never raises a stale access window")
+        BudgetWindows.unregister(accessWindow)
         BudgetWindows.unregister(budgetWindow); BudgetWindows.unregister(otherBudgetWindow)
         check(BudgetWindows.preferred(ordered: [settingsWindow, budgetWindow], key: settingsWindow) == nil,
               "notification does not select unrelated or detached windows")
@@ -142,6 +152,9 @@ private struct Transport: AppUpdateTransport {
             contract.manualRows = [ManualFinanceRow(date: .today, kind: .depositInterest, components: [FinancialAllocation(.interest, 100)], amount: 100)]
             try FinancialLedger.saveContract(contract, in: &db)
         }
+        await model.waitForDailyBackup()
+        check(!model.dailyBackupBusy && model.db?.settings.lastDaily == .today && model.backupError == nil,
+              "background daily backup completes and records verified metadata")
         try await wait { !model.financialBusy }
         check(!model.financialBusy && model.financialEvents.values.flatMap({ $0 }).contains(where: { $0.amount == 100 }),
               "daily backup revision cannot leave financial forecasts busy")
@@ -182,7 +195,9 @@ private struct Transport: AppUpdateTransport {
         } else { check(false, "deposit reminder fixture exists") }
         model.sheet = nil; model.lock(); model.pendingFinancialRoute = (token, scheduled.eventID); model.handleFinancialNotification()
         check(model.db == nil && model.sheet == nil && model.pendingFinancialRoute != nil, "locked budget keeps payment route without exposing its contents")
+        model.error = "Ошибка предыдущей попытки"
         model.unlock(password: "UI fixture password only")
+        check(model.error == nil, "successful unlock clears the previous access error")
         try await wait { !model.financialBusy }
         check(model.sheet?.entityID == scheduled.id && model.pendingFinancialRoute == nil, "payment route opens after password unlock and forecast")
         model.sheet = nil; model.pendingFinancialRoute = ("other-budget", scheduled.eventID); model.handleFinancialNotification()
@@ -266,6 +281,34 @@ private struct Transport: AppUpdateTransport {
         check(refused && protectedBytes == stillProtected && FileManager.default.fileExists(atPath: changedSafety.snapshot(for: changedRecord).path),
               "unresolved discrepancy preserves current ciphertext and original snapshot")
         changed.lock(); try FileManager.default.removeItem(at: changed.root)
+        model.loadPreview(.empty)
+        try model.commit { $0.settings.baseCurrency = "USD" }
+        check(model.dailyBackupBusy && model.updateBlocker != nil,
+              "updater waits for the pending daily backup")
+        try model.commit { $0.settings.baseCurrency = "EUR" }
+        await model.waitForDailyBackup()
+        check(model.db?.settings.baseCurrency == "EUR" && model.db?.settings.lastDaily == .today && model.backupError == nil,
+              "background backup metadata preserves a later ordinary write")
+        model.loadPreview(.empty)
+        let blockedBackup = model.backupFolder
+        try Data("Fictional blocked path".utf8).write(to: blockedBackup)
+        try model.commit { $0.settings.baseCurrency = "USD" }
+        await model.waitForDailyBackup()
+        check(model.db?.settings.baseCurrency == "USD" && model.db?.settings.lastDaily == nil && model.backupError != nil && !model.dailyBackupBusy,
+              "failed background copy preserves the saved change and exposes a retryable warning")
+        try FileManager.default.removeItem(at: blockedBackup)
+        try model.commit { $0.settings.baseCurrency = "EUR" }
+        await model.waitForDailyBackup()
+        check(model.db?.settings.baseCurrency == "EUR" && model.db?.settings.lastDaily == .today && model.backupError == nil,
+              "the next change retries a failed daily backup")
+        model.loadPreview(.empty)
+        try model.commit { $0.settings.baseCurrency = "USD" }
+        let pendingBackup = Task { await model.waitForDailyBackup() }
+        await Task.yield()
+        model.lock()
+        await pendingBackup.value
+        check(model.db == nil && model.vault.db == nil && !model.dailyBackupBusy && model.backupError == nil,
+              "lock cancels backup publication and cannot reopen the budget")
         model.vault.close()
         try FileManager.default.removeItem(at: model.root)
         print("Coordinator failures: \(failures)")

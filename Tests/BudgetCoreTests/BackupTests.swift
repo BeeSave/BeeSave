@@ -2,6 +2,56 @@ import XCTest
 @testable import BudgetCore
 
 final class BackupTests: XCTestCase {
+    func testBackgroundSnapshotAndStampPreserveInterveningWritesAndSession() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = VaultStore(url: root.appendingPathComponent("vault.beesave"))
+        defer { store.close(); try? FileManager.default.removeItem(at: root) }
+        let db = Database(), key = try VaultCrypto.random()
+        let bootstrap = Bootstrap(databaseID: db.id, password: nil, recovery: Data())
+        try store.initialize(db: db, dataKey: key, bootstrap: bootstrap)
+        let snapshot = try store.snapshot()
+        let prepared = try snapshot.recordingDailyBackup(day: .today, completedAt: Date())
+        try store.transaction { $0.settings.baseCurrency = "USD" }
+        let before = try Data(contentsOf: store.url)
+        XCTAssertFalse(try store.applyBackupStamp(prepared))
+        XCTAssertEqual(try Data(contentsOf: store.url), before)
+        let copy = root.appendingPathComponent("snapshot.mubak")
+        try snapshot.backup(to: copy)
+        XCTAssertEqual(try VaultFile.read(Data(contentsOf: copy)).decrypt(key: key), db)
+        let retry = try store.snapshot().recordingDailyBackup(day: .today, completedAt: Date())
+        XCTAssertTrue(try store.applyBackupStamp(retry))
+        XCTAssertEqual(store.db?.settings.baseCurrency, "USD")
+        XCTAssertEqual(store.db?.settings.lastDaily, .today)
+        XCTAssertEqual(try VaultFile.read(Data(contentsOf: store.url)).decrypt(key: key), store.db)
+        let oldSession = try store.snapshot().recordingDailyBackup(day: .today, completedAt: Date())
+        store.close(); try store.unlock(key: key)
+        let reopened = try Data(contentsOf: store.url)
+        XCTAssertFalse(try store.applyBackupStamp(oldSession))
+        XCTAssertEqual(try Data(contentsOf: store.url), reopened)
+        let oldBootstrap = try store.snapshot().recordingDailyBackup(day: .today, completedAt: Date())
+        var next = bootstrap; next.localKeyID = UUID()
+        try store.changeBootstrap(next)
+        XCTAssertFalse(try store.applyBackupStamp(oldBootstrap))
+        XCTAssertEqual(store.bootstrap, next)
+    }
+
+    func testFailedBackgroundStampPreservesDatabaseAndCanRetry() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = VaultStore(url: root.appendingPathComponent("vault.beesave"))
+        defer { store.close(); try? FileManager.default.removeItem(at: root) }
+        let db = Database(), key = try VaultCrypto.random()
+        try store.initialize(db: db, dataKey: key, bootstrap: Bootstrap(databaseID: db.id, password: nil, recovery: Data()))
+        let prepared = try store.snapshot().recordingDailyBackup(day: .today, completedAt: Date())
+        let before = try Data(contentsOf: store.url)
+        store.beforeWrite = { throw BudgetError.storage("Injected write failure") }
+        XCTAssertThrowsError(try store.applyBackupStamp(prepared))
+        XCTAssertEqual(store.db, db)
+        XCTAssertEqual(try Data(contentsOf: store.url), before)
+        store.beforeWrite = nil
+        XCTAssertTrue(try store.applyBackupStamp(prepared))
+        XCTAssertEqual(store.db?.settings.lastDaily, .today)
+    }
+
     func testFailedExternalReplacementPreservesVerifiedCopy() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let store = VaultStore(url: root.appendingPathComponent("vault.beesave"))

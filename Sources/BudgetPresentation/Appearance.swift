@@ -50,7 +50,7 @@ public enum AppearanceTheme: String, Codable, CaseIterable, Identifiable, Sendab
     case beeSave, midnight, sepia, custom
     public var id: String { rawValue }
     public var title: String { switch self { case .beeSave: "BeeSave"; case .midnight: "Полночь"; case .sepia: "Сепия"; case .custom: "Своя тема" } }
-    public var detail: String { switch self { case .beeSave: "Бирюза и мёд · как в macOS"; case .midnight: "Тёмно-синяя и оранжевый"; case .sepia: "Тёплая светлая и чёрный"; case .custom: "Ваша собственная палитра" } }
+    public var detail: String { switch self { case .beeSave: "Liquid Glass · системный светлый и тёмный"; case .midnight: "Тёмно-синяя и оранжевый"; case .sepia: "Тёплая светлая и чёрный"; case .custom: "Ваша собственная палитра" } }
 }
 
 public struct AppearancePalette: Codable, Equatable, Sendable {
@@ -67,12 +67,12 @@ public struct AppearancePalette: Codable, Equatable, Sendable {
         switch theme {
         case .beeSave, .custom:
             return systemDark
-                ? Self(dark: true, colors: [0x075C65, 0x012F39, 0x022F38, 0x123F49, 0xFFF7E6, 0xBBD0C9, 0xF7C756, 0x173F42, 0xFFF7E6, 0xD5E7DD])
-                : Self(dark: false, colors: [0x08646B, 0x013E46, 0x03434C, 0xFFF8E9, 0x173F42, 0x50645D, 0xF7C756, 0x173F42, 0xFFF7E6, 0xD5E7DD])
+                ? Self(dark: true, colors: [0x172427, 0x101B1E, 0x1B2B2F, 0x213338, 0xF1F6F3, 0xB5C7C1, 0xF3C75C, 0x172E2E, 0xF1F6F3, 0xB5C7C1])
+                : Self(dark: false, colors: [0xF2F5F5, 0xE8EEEE, 0xEAF0EF, 0xFFFFFF, 0x192B2D, 0x536567, 0xF7C756, 0x173F42, 0x192B2D, 0x536567])
         case .midnight:
             return Self(dark: true, colors: [0x142743, 0x090F1D, 0x0C1729, 0x1B2B43, 0xF4F6FA, 0xB9C6D9, 0xFFAB61, 0x25180D, 0xF4F6FA, 0xB9C6D9])
         case .sepia:
-            return Self(dark: false, colors: [0xEEE4D2, 0xDDD0B8, 0xE6DAC3, 0xFFFAF0, 0x25231F, 0x625A4C, 0x29251F, 0xFFF8E9, 0x25231F, 0x5D5548])
+            return Self(dark: false, colors: [0xF6F1E8, 0xEEE7DA, 0xF1EADD, 0xFFFCF5, 0x25231F, 0x625A4C, 0x29251F, 0xFFF8E9, 0x25231F, 0x5D5548])
         }
     }
     public var selected: AppearanceColor { surface.mixed(with: accent, fraction: dark ? 0.12 : 0.08) }

@@ -2,6 +2,17 @@ import XCTest
 @testable import BudgetPresentation
 
 final class AppearanceTests: XCTestCase {
+    func testPreGlassCustomPreferencesKeepEveryStoredColor() throws {
+        // Frozen v1 data from the previous appearance format. Do not generate
+        // this fixture with the current encoder or replace it with a preset.
+        let stored = Data(#"{"theme":"custom","textPercent":140,"custom":{"dark":true,"backgroundStart":{"hex":482405},"backgroundEnd":{"hex":77625},"chrome":{"hex":143160},"surface":{"hex":1195849},"text":{"hex":16775142},"muted":{"hex":12308681},"accent":{"hex":16238422},"accentText":{"hex":1523522},"onBackground":{"hex":16775142},"backgroundMuted":{"hex":14018525}}}"#.utf8)
+        let loaded = AppearancePreferences.load(stored)
+        XCTAssertEqual(loaded.theme, .custom)
+        XCTAssertEqual(loaded.textPercent, 140)
+        XCTAssertEqual(loaded.custom, AppearancePalette(dark: true, colors: [0x075C65, 0x012F39, 0x022F38, 0x123F49, 0xFFF7E6, 0xBBD0C9, 0xF7C756, 0x173F42, 0xFFF7E6, 0xD5E7DD]))
+        XCTAssertNotEqual(loaded.custom, AppearancePalette.preset(.beeSave, systemDark: true))
+        XCTAssertEqual(AppearancePreferences.load(try JSONEncoder().encode(loaded)), loaded)
+    }
     func testPresetContrastAndSemanticColors() {
         for dark in [false, true] {
             for theme in AppearanceTheme.allCases {

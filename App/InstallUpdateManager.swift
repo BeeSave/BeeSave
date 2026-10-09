@@ -97,7 +97,7 @@ extension InstallUpdateManager {
             }
             model.updateVerificationPending = false
             budgetVerificationError = nil
-            if !matches.isEmpty { model.notice = "BeeSave обновлён до версии \(version). Бюджет проверен и сохранён." }
+            if !matches.isEmpty { model.showNotice("BeeSave обновлён до версии \(version). Бюджет проверен и сохранён.", kind: .success) }
             recoveryFolder = pending.isEmpty ? nil : safety.directory
         } catch {
             // Do not overwrite current data, delete the previous app, or start a
@@ -121,7 +121,7 @@ extension InstallUpdateManager {
             }
             model.updateVerificationPending = false
             budgetVerificationError = nil
-            model.notice = "Вы выбрали текущий бюджет. Защитная папка сохранена; автоматический возврат данных не выполнялся."
+            model.showNotice("Вы выбрали текущий бюджет. Защитная папка сохранена; автоматический возврат данных не выполнялся.", kind: .warning)
         } catch { state = .failed(error.localizedDescription) }
     }
 

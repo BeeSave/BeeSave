@@ -80,7 +80,7 @@ struct ImportView: View {
                 if stage < 3 { Button("Далее") { next() }.buttonStyle(BeePrimaryStyle()).disabled(data == nil || working) }
                 if stage == 3 { Button("Импортировать \(preview?.added.count ?? 0) записей") { do { guard let preview, !committed else { return }; committed = true; try model.importPreview(preview); stage = 4; data = nil; self.preview = nil } catch { committed = false; self.error = error.localizedDescription } }.buttonStyle(BeePrimaryStyle()).disabled(preview?.canCommit != true || working || committed) }
             }
-        }.padding(24).frame(width: 800, height: 640).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.controlAccent).beeAppearance().interactiveDismissDisabled().onDisappear { task?.cancel(); data = nil; preview = nil }
+        }.padding(24).beeSheet(width: 800, height: 640).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.controlAccent).beeAppearance().interactiveDismissDisabled().onDisappear { task?.cancel(); data = nil; preview = nil }
         .confirmationDialog("Отменить импорт? До фиксации база не изменится.", isPresented: $discard) { Button("Отменить импорт", role: .destructive) { task?.cancel(); dismiss() }; Button("Вернуться", role: .cancel) {} }
         .sheet(item: $paymentRow) { row in CSVFinancialPaymentEditor(row: row.id, initial: options.financialPayments[row.id]) { options.financialPayments[row.id] = $0 } }
     }
@@ -200,7 +200,7 @@ struct RestoreView: View {
                 if !error.isEmpty { Text(error).foregroundStyle(BeeStyle.negative) }
             }.frame(maxWidth: .infinity, alignment: .leading) }
             Divider(); HStack { Button(stage == 3 ? "Закрыть" : "Отмена") { if stage == 3 || (url == nil && recovery.isEmpty) { dismiss() } else { discard = true } }.keyboardShortcut(.cancelAction); Spacer(); if stage > 0 && stage < 3 { Button("Назад") { invalidate(); password = ""; repeated = ""; stage = 0 } }; if stage < 2 { Button("Далее") { if stage == 0 { stage = 1; verify() } else { stage = 2 } }.buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(stage == 0 ? url == nil || recovery.isEmpty : preview == nil || working) }; if stage == 2 { Button("Заменить данные", action: restore).buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(!confirmed || password.count < 12 || password != repeated || preview == nil || model.busy) } }
-        }.padding(24).frame(width: 600, height: 550).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.controlAccent).beeAppearance().interactiveDismissDisabled()
+        }.padding(24).beeSheet(width: 600, height: 550).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.controlAccent).beeAppearance().interactiveDismissDisabled()
             .onChange(of: recovery) { invalidate() }.onDisappear { invalidate(); recovery = ""; password = ""; repeated = "" }
             .confirmationDialog("Закрыть восстановление? Текущие данные сохранятся.", isPresented: $discard) { Button("Закрыть", role: .destructive) { dismiss() }; Button("Продолжить", role: .cancel) {} }
     }

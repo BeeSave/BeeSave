@@ -19,16 +19,18 @@ extension AppModel {
             try commit { database in
                 try FinancialLedger.payDebt(contractID: contract.id, from: source.id, amount: 3_000_000, interestCharge: 2_000_000, date: .today, in: &database)
             }
-            finishFixtureMeasurement("Сохранение платежа и UI", began: began, threshold: 1)
+            let saved = ProcessInfo.processInfo.systemUptime - began
+            finishFixtureMeasurement("Сохранение платежа и UI", began: began, threshold: 1, saved: saved)
         } catch { self.error = error.localizedDescription }
     }
-    private func finishFixtureMeasurement(_ label: String, began: TimeInterval, threshold: Double) {
+    private func finishFixtureMeasurement(_ label: String, began: TimeInterval, threshold: Double, saved: TimeInterval? = nil) {
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(16)) { [weak self] in
             guard let self else { return }
             NSApp.mainWindow?.contentView?.layoutSubtreeIfNeeded()
             NSApp.mainWindow?.contentView?.displayIfNeeded()
             let elapsed = ProcessInfo.processInfo.systemUptime - began
-            self.notice = "\(label): \(String(format: "%.3f", elapsed)) с · порог \(threshold) с · \(elapsed <= threshold ? "PASS" : "FAIL"). 100 000 операций / 100 счетов / 100 договоров."
+            let detail = saved.map { " Запись: \(String(format: "%.3f", $0)) с; показ: \(String(format: "%.3f", elapsed - $0)) с." } ?? ""
+            self.notice = "\(label): \(String(format: "%.3f", elapsed)) с · порог \(threshold) с · \(elapsed <= threshold ? "PASS" : "FAIL").\(detail) 100 000 операций / 100 счетов / 100 договоров."
         }
     }
 }

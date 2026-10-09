@@ -6,8 +6,12 @@ public enum FinancialReports {
         // Existing debt and obligations remain visible for archived accounts.
         if report.dataset == .debt {
             let end = min(report.filters.end ?? asOf, asOf)
-            if report.grouping == .account { return try accounts.filter { $0.kind.isDebt && $0.openedOn <= end }.map { account in
-                let summary = try FinancialLedger.debt(accountID: account.id, db: db, on: end)
+            if report.grouping == .account {
+                let operations = FinancialLedger.operationsByAccount(in: db)
+                return try accounts.filter { $0.kind.isDebt && $0.openedOn <= end }.map { account in
+                var projection = db
+                if db.contract(for: account.id) != nil { projection.operations = operations[account.id] ?? [] }
+                let summary = try FinancialLedger.debt(accountID: account.id, db: projection, on: end)
                 let amount = report.metric == .principal ? summary.amount(.principal) : report.metric == .interest ? summary.amount(.interest) : report.metric == .fees ? try Money.add(summary.amount(.fee), summary.amount(.penalty)) : summary.debt
                 let complete = ![Metric.principal, .interest, .fees].contains(report.metric) || summary.amount(.unallocated) == 0
                 var row = ReportRow(id: account.id.uuidString, title: account.name, value: try valuation(amount, account: account, report: report, date: end, db: db, complete: complete)); row.accountIDs = [account.id]; return row

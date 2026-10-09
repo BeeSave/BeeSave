@@ -73,7 +73,7 @@ struct AppUpdateView: View {
                 Spacer()
                 Link("Что нового", destination: URL(string: "https://github.com/BeeSave/BeeSave/releases/latest")!)
             }
-        }.padding(24) }.frame(width: min(740, 550 * appearance.scale), height: min(740, 440 * appearance.scale)).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.controlAccent).beeAppearance()
+        }.padding(24) }.beeSheet(width: 550, height: 480).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(BeeStyle.controlAccent).beeAppearance()
         .onDisappear { updater.dismiss() }
         .confirmationDialog("Продолжить с текущим бюджетом?", isPresented: $keepCurrent) {
             Button("Продолжить") { updater.keepCurrentBudget() }

@@ -6,8 +6,8 @@ struct ExpensesView: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var body: some View {
-        VStack(spacing: 0) {
-            BeePicker("Расходы", selection: $model.showScheduledExpenses) { Text("Фактические").tag(false); Text("Запланированные").tag(true) }.beePickerStyle(.segmented).padding(.horizontal, 24).padding(.top, 18)
+        VStack(alignment: .leading, spacing: 0) {
+            BeePicker("Расходы", selection: $model.showScheduledExpenses) { Text("Фактические").tag(false); Text("Запланированные").tag(true) }.labelsHidden().beePickerStyle(.segmented).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 24).padding(.top, 18)
             if model.showScheduledExpenses { ScheduledPaymentsView() } else { OperationsView(kind: .expense) }
         }
     }
@@ -30,7 +30,10 @@ struct ScheduledPaymentsView: View {
             if let db = model.db { ScrollView { LazyVStack(alignment: .leading, spacing: 16) {
                 SectionHeading(title: "Запланированные расходы") { Button("Запланировать расход", systemImage: "plus") { model.sheet = SheetRoute(kind: .scheduledPayment) }.buttonStyle(BeePrimaryStyle()) }
                 Text("Предстоящие оплаты по договорам и рассрочке. Деньги списываются после подтверждения фактического расхода.").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted)
-                HStack { TextField("Название, комментарий или договор", text: $search).textFieldStyle(BeeTextFieldStyle()); BeePicker("Состояние", selection: $status) { Text("Предстоящие").tag("Предстоящие"); ForEach(ScheduledPaymentState.allCases, id: \.self) { Text($0.title).tag($0.title) }; Text("Все").tag("Все"); Text("Архив").tag("Архив") }.frame(width: 220) }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 16) { searchField; statusPicker.fixedSize() }
+                    VStack(alignment: .leading, spacing: 12) { searchField; statusPicker }
+                }
                 DisclosureGroup("Период оплаты") { HStack { DayField(title: "С даты", value: $from); DayField(title: "По дату", value: $through); Button("Сбросить") { from = ""; through = "" } } }.beeCard()
                 let selected = rows(db, now: clock.date)
                 ScheduledTotals(payments: selected)
@@ -39,6 +42,8 @@ struct ScheduledPaymentsView: View {
             }.padding(24) } }
         }
     }
+    private var searchField: some View { TextField("Название, комментарий или договор", text: $search).textFieldStyle(BeeTextFieldStyle()).frame(minWidth: 220) }
+    private var statusPicker: some View { BeePicker("Состояние", selection: $status) { Text("Предстоящие").tag("Предстоящие"); ForEach(ScheduledPaymentState.allCases, id: \.self) { Text($0.title).tag($0.title) }; Text("Все").tag("Все"); Text("Архив").tag("Архив") } }
 }
 struct ScheduledTotals: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
@@ -105,7 +110,7 @@ struct ScheduledPaymentDetail: View {
                     if p.cancelled || (try? ScheduledPayments.remaining(p, db: db)) == 0 { Button(p.archived ? "Из архива" : "В архив") { var copy = p; copy.archived.toggle(); model.perform { try ScheduledPayments.save(copy, in: &$0) } } }
                     Spacer(); Button("Изменить / перенести") { action = .edit }; Button("Оплатить") { action = .pay }.buttonStyle(BeePrimaryStyle()).disabled(p.cancelled || p.archived || (try? ScheduledPayments.remaining(p, db: db)) == 0)
                 }
-            }.padding(24).frame(width: 740, height: 620).beeWindow().sheet(item: $action) { item in switch item { case .edit: ScheduledPaymentEditor(id: p.id); case .pay: ScheduledPaymentPayEditor(id: p.id) } }
+            }.padding(24).beeSheet(width: 740, height: 620).beeWindow().sheet(item: $action) { item in switch item { case .edit: ScheduledPaymentEditor(id: p.id); case .pay: ScheduledPaymentPayEditor(id: p.id) } }
         } else { EmptyState(title: "Платёж недоступен", detail: "Он удалён или относится к другой базе.").padding(24) }
     }
 }

@@ -8,6 +8,9 @@ final class AppearanceStore: ObservableObject {
     private let key = "BeeSave.appearance.v1"
     @Published private(set) var preferences: AppearancePreferences
     @Published private(set) var systemDark: Bool
+    #if DEBUG && UI_SMOKE
+    @Published var previewColorScheme: ColorScheme?
+    #endif
     private var systemAppearanceObservation: NSKeyValueObservation?
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -31,7 +34,11 @@ final class AppearanceStore: ObservableObject {
         switch preferences.theme {
         // Explicitly restore the system mode: preferredColorScheme(nil) can
         // retain the preceding fixed theme in an already open macOS window.
-        case .beeSave: return systemDark ? .dark : .light
+        case .beeSave:
+            #if DEBUG && UI_SMOKE
+            if let previewColorScheme { return previewColorScheme }
+            #endif
+            return systemDark ? .dark : .light
         case .midnight: return .dark
         case .sepia: return .light
         case .custom: return preferences.custom.dark ? .dark : .light
@@ -77,7 +84,9 @@ struct BeeAppearanceModifier: ViewModifier {
         content.environment(\.beeAppearance, store.preferences)
             .font(.system(size: 15 * store.preferences.scale))
             .preferredColorScheme(store.colorScheme)
-            .buttonStyle(BeeRowStyle())
+            .tint(BeeStyle.honey)
+            .accentColor(BeeStyle.honey)
+            .buttonStyle(BeeControlStyle())
     }
 }
 

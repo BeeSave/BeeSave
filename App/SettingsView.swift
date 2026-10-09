@@ -8,30 +8,21 @@ struct SettingsView: View {
     @State private var editor: SettingsEditor?
     private var selectedTask: SettingsTask { model.db == nil ? .appearance : model.settingsTask }
     var body: some View {
-        HStack(spacing: 0) {
+        NavigationSplitView {
+            BeeSidebar(items: SettingsTask.allCases,
+                selection: Binding(get: { selectedTask }, set: { model.settingsTask = $0 }),
+                name: "Разделы настроек", enabled: { model.db != nil || $0 == .appearance }) { item in
+                    Text(item.rawValue).beeFont(.body).lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.vertical, 5)
+            }
+                .navigationSplitViewColumnWidth(min: 205, ideal: 230, max: 320)
+        } detail: {
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Настройки").beeFont(.title2.bold()).padding(.bottom, 12)
-                    ForEach(SettingsTask.allCases) { item in
-                        Button { model.settingsTask = item } label: {
-                            Text(item.rawValue).fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                                .foregroundStyle(selectedTask == item ? BeeStyle.honeyText : BeeStyle.onBackground)
-                                .background(selectedTask == item ? BeeStyle.honey : .clear, in: RoundedRectangle(cornerRadius: 8))
-                                .overlay { if selectedTask == item { RoundedRectangle(cornerRadius: 8).strokeBorder(BeeStyle.honeyText, lineWidth: 1).allowsHitTesting(false) } }
-                        }.buttonStyle(BeeRowStyle()).disabled(model.db == nil && item != .appearance)
-                            .accessibilityAddTraits(selectedTask == item ? .isSelected : [])
-                    }
-                }.padding(18)
-            }.frame(width: min(300, 205 * pow(appearanceStore.preferences.scale, 0.7))).background(BeeStyle.chrome)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(model.db == nil ? "Внешний вид" : model.settingsTask.rawValue).beeFont(.title2.bold())
+                VStack(alignment: .leading, spacing: 24) {
                     if model.db == nil || model.settingsTask == .appearance { AppearanceSettingsView() }
                     else if let db = model.db { content(db: db) }
-                }.frame(maxWidth: .infinity, alignment: .leading).padding(24)
-            }
-        }.beeWindow()
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(28)
+            }.beeNavigationContent().navigationTitle(selectedTask.rawValue)
+        }.beeWindow().background(BudgetWindowMarker(role: .settings)).beeNotices()
             #if DEBUG && UI_SMOKE
             .preferredColorScheme(appearanceStore.preferences.theme == .beeSave ? model.previewAppearance : appearanceStore.colorScheme)
             #endif
@@ -56,6 +47,7 @@ struct SettingsView: View {
             }.beeCard()
         case .rates:
             VStack(alignment: .leading, spacing: 14) {
+                if let error = model.rateError { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(BeeStyle.negative).fixedSize(horizontal: false, vertical: true) }
                 Text("Последняя проверка: " + (db.settings.lastRateCheck?.formatted(date: .numeric, time: .shortened) ?? "ещё не выполнялась")).beeFont(.caption).foregroundStyle(BeeStyle.muted)
                 HStack { Button("Обновить курсы") { model.refreshRates() }.disabled(model.rateBusy); if model.rateBusy { ProgressView().controlSize(.small); Button("Отмена") { model.rateTask?.cancel() } } }
                 Button("Добавить ручной курс…") { editor = .rate }
@@ -75,7 +67,7 @@ struct SettingsView: View {
             }.beeCard()
         case .reminders:
             VStack(alignment: .leading, spacing: 14) {
-                Text("Финансовый календарь доступен без системных уведомлений.").beeFont(.headline)
+                Text("Календарь доступен без системных уведомлений.").beeFont(.headline)
                 if db.financeData.reminders.systemEnabled { Button("Выключить системные уведомления") { model.perform { db in var book = db.financeData; book.reminders.systemEnabled = false; db.finances = book } } }
                 else { Button("Включить системные уведомления…") { Task { await FinancialNotifications.enable(model: model) } } }
                 Text("Системные напоминания содержат нейтральный текст. Названия счетов, суммы и условия видны после разблокировки. Планируются ближайшие 45 дней, до 60 напоминаний; окно пополняется при работе с бюджетом.").beeFont(.caption).foregroundStyle(BeeStyle.muted)

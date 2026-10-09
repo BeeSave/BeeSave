@@ -39,10 +39,46 @@ public struct VaultFile: Sendable {
     public func portable() -> VaultFile { var copy = self; copy.bootstrap.password = nil; copy.bootstrap.touchID = false; copy.bootstrap.localKeyID = UUID(); return copy }
 }
 
+/// Immutable session snapshot. Only ciphertext is ever written to disk.
+public struct VaultSnapshot: Sendable {
+    fileprivate let database: Database
+    fileprivate let key: Data
+    fileprivate let bootstrap: Bootstrap
+    fileprivate let session: UUID
+    public func backup(to destination: URL) throws {
+        let file = try VaultFile.make(db: database, key: key, bootstrap: bootstrap).portable()
+        do {
+            try CiphertextFile.write(try file.encoded(), to: destination)
+            let check = try VaultFile.read(Data(contentsOf: destination))
+            guard try check.decrypt(key: key) == database else { throw BudgetError.corrupt }
+        } catch { throw BudgetError.storage("Копия не записана или не прошла проверку. Выберите другой путь и проверьте свободное место.") }
+    }
+    public func recordingDailyBackup(day: Day, completedAt: Date) throws -> PreparedVaultBackupStamp {
+        var candidate = database
+        let (revision, overflow) = (candidate.revision ?? 0).addingReportingOverflow(1)
+        guard !overflow else { throw BudgetError.overflow }
+        candidate.revision = revision
+        candidate.settings.lastDaily = day
+        candidate.settings.lastBackup = max(candidate.settings.lastBackup ?? .distantPast, completedAt)
+        try Ledger.validate(candidate)
+        return PreparedVaultBackupStamp(database: candidate,
+            bytes: try VaultFile.make(db: candidate, key: key, bootstrap: bootstrap).encoded(),
+            sourceRevision: database.revision ?? 0, session: session)
+    }
+}
+
+public struct PreparedVaultBackupStamp: Sendable {
+    fileprivate let database: Database
+    fileprivate let bytes: Data
+    fileprivate let sourceRevision: UInt64
+    fileprivate let session: UUID
+}
+
 public final class VaultStore {
     public let url: URL; public private(set) var db: Database?; public private(set) var bootstrap: Bootstrap?; private var key: Data?; private var lockFD: Int32 = -1
     /// Test hook runs after ciphertext is prepared and before the atomic write. No plaintext ever reaches it.
     public var beforeWrite: (() throws -> Void)?
+    private var session = UUID()
     public init(url: URL) { self.url = url }
     deinit { close() }
     public var exists: Bool { FileManager.default.fileExists(atPath: url.path) }
@@ -55,13 +91,13 @@ public final class VaultStore {
     }
     public func inspect() throws -> Bootstrap { let b = try VaultFile.read(Data(contentsOf: url)).bootstrap; bootstrap = b; return b }
     public func initialize(db: Database, dataKey: Data, bootstrap b: Bootstrap) throws {
-        try acquire(); guard !exists else { throw BudgetError.conflict("База уже существует. Используйте вход или восстановление.") }; try Ledger.validate(db); try persist(db, key: dataKey, bootstrap: b); self.db = db; key = dataKey; bootstrap = b
+        try acquire(); guard !exists else { throw BudgetError.conflict("База уже существует. Используйте вход или восстановление.") }; try Ledger.validate(db); try persist(db, key: dataKey, bootstrap: b); self.db = db; key = dataKey; bootstrap = b; session = UUID()
     }
     public func unlock(key dataKey: Data) throws {
         try acquire(); let file = try VaultFile.read(Data(contentsOf: url)); let original = try file.decrypt(key: dataKey)
         let database = try prepareMigration(original, file: file, key: dataKey)
         if original.version != database.version { try persist(database, key: dataKey, bootstrap: file.bootstrap) }
-        db = database; key = dataKey; bootstrap = file.bootstrap
+        db = database; key = dataKey; bootstrap = file.bootstrap; session = UUID()
     }
     private func prepareMigration(_ original: Database, file: VaultFile, key: Data) throws -> Database {
         guard original.version < 3 else { return original }
@@ -88,7 +124,7 @@ public final class VaultStore {
         next.password = try VaultCrypto.wrapPassword(recoveredKey, password: newPassword)
         next.touchID = false
         try persist(database, key: recoveredKey, bootstrap: next)
-        db = database; key = recoveredKey; bootstrap = next
+        db = database; key = recoveredKey; bootstrap = next; session = UUID()
     }
     public func changePassword(current: String, useRecovery: Bool = false, newPassword: String) throws {
         if useRecovery { try verifyRecovery(current) } else { try verifyPassword(current) }
@@ -104,7 +140,7 @@ public final class VaultStore {
         try change(&candidate); candidate.revision = revision; try Ledger.validate(candidate); try persist(candidate, key: key, bootstrap: b); db = candidate
     }
     public func changeBootstrap(_ new: Bootstrap) throws {
-        guard let db, let key else { throw BudgetError.locked }; try persist(db, key: key, bootstrap: new); bootstrap = new
+        guard let db, let key else { throw BudgetError.locked }; try persist(db, key: key, bootstrap: new); bootstrap = new; session = UUID()
     }
     public func verifyPassword(_ password: String) throws { guard let env = bootstrap?.password, let key else { throw BudgetError.locked }; guard try VaultCrypto.unwrapPassword(env, password: password) == key else { throw BudgetError.wrongKey } }
     public func verifyRecovery(_ recovery: String) throws { guard let b = bootstrap, let key else { throw BudgetError.locked }; guard try VaultCrypto.open(b.recovery, key: VaultCrypto.recoveryKey(recovery), context: VaultCrypto.recoveryContext) == key else { throw BudgetError.wrongKey } }
@@ -115,11 +151,21 @@ public final class VaultStore {
         catch { throw BudgetError.storage("Не удалось сохранить базу. Освободите место, проверьте права и повторите.") }
     }
     public func backup(to destination: URL) throws {
-        guard let db, let key, let b = bootstrap else { throw BudgetError.locked }
-        let file = try VaultFile.make(db: db, key: key, bootstrap: b).portable(); let bytes = try file.encoded()
-        do { try CiphertextFile.write(bytes, to: destination)
-            let check = try VaultFile.read(Data(contentsOf: destination)); guard try check.decrypt(key: key) == db else { throw BudgetError.corrupt }
-        } catch { throw BudgetError.storage("Копия не записана или не прошла проверку. Выберите другой путь и проверьте свободное место.") }
+        try snapshot().backup(to: destination)
+    }
+    public func snapshot() throws -> VaultSnapshot {
+        guard let db, let key, let bootstrap else { throw BudgetError.locked }
+        return VaultSnapshot(database: db, key: key, bootstrap: bootstrap, session: session)
+    }
+    /// Apply only to the exact session/revision that was prepared off-thread.
+    /// A rejected result has no disk or in-memory effects and may be retried.
+    @discardableResult public func applyBackupStamp(_ prepared: PreparedVaultBackupStamp) throws -> Bool {
+        guard let db, key != nil, prepared.session == session,
+              prepared.database.id == db.id, prepared.sourceRevision == (db.revision ?? 0) else { return false }
+        try beforeWrite?()
+        try CiphertextFile.write(prepared.bytes, to: url)
+        self.db = prepared.database
+        return true
     }
     public func previewRestore(from source: URL, recovery: String) throws -> (Database, VaultFile, Data) {
         let file = try VaultFile.read(Data(contentsOf: source)); let newKey = try file.recoveryUnlock(recovery); let newDB = try file.decrypt(key: newKey); return (newDB, file, newKey)
@@ -128,9 +174,10 @@ public final class VaultStore {
         try acquire(); try Ledger.validate(database)
         if exists { guard let safetyCopy else { throw BudgetError.invalid("Перед заменой требуется полная копия текущих данных.") }; try backup(to: safetyCopy) }
         let migrated = try FinancialLedger.migrate(database)
-        try persist(migrated, key: dataKey, bootstrap: bootstrap); db = migrated; key = dataKey; self.bootstrap = bootstrap
+        try persist(migrated, key: dataKey, bootstrap: bootstrap); db = migrated; key = dataKey; self.bootstrap = bootstrap; session = UUID()
     }
     public func close() {
+        session = UUID()
         db = nil; if var data = key { data.resetBytes(in: 0..<data.count) }; key = nil
         if lockFD >= 0 { flock(lockFD, LOCK_UN); Darwin.close(lockFD); lockFD = -1 }
     }

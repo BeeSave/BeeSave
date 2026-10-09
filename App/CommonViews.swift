@@ -25,7 +25,7 @@ struct CurrencyPicker: View {
                         }
                     } }.frame(height: 260)
                     Button("Отмена") { open = false }.keyboardShortcut(.cancelAction)
-                }.padding(18).frame(width: 330).foregroundStyle(BeeStyle.text).background(BeeStyle.surface)
+                }.padding(18).frame(width: 330 * pow(appearanceStore.preferences.scale, 0.5)).foregroundStyle(.primary)
             }
     }
 }
@@ -79,7 +79,7 @@ struct EditorFrame<Content: View>: View {
                 Button(saveTitle, action: submit).buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(!canSave || model.busy || submitting)
                 }
             }.padding(20)
-        }.frame(width: width, height: height).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(tintColor).beeAppearance()
+        }.beeSheet(width: width, height: height).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(tintColor).beeAppearance()
             .interactiveDismissDisabled(isDirty)
             .modifier(UpdateFormGuard(active: true))
             .onDisappear { submitTask?.cancel() }
@@ -121,5 +121,47 @@ struct OperationDetailSheet: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
     var context: OperationDetailContext
     @Environment(\.dismiss) private var dismiss
-    var body: some View { VStack(spacing: 0) { HStack { Text(context.title).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() }.keyboardShortcut(.cancelAction) }.padding(22); OperationsView(accountID: context.accountID, ids: context.ids, initialFilters: context.filters) }.frame(width: 960, height: 640).beeWindow() }
+    var body: some View { VStack(spacing: 0) { HStack { Text(context.title).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() }.keyboardShortcut(.cancelAction) }.padding(22); OperationsView(accountID: context.accountID, ids: context.ids, initialFilters: context.filters) }.beeSheet(width: 960, height: 640).beeWindow() }
+}
+
+/// A sheet grows for large text but never places its action row offscreen.
+private struct BeeSheetSize: ViewModifier {
+    @ObservedObject private var store = AppearanceStore.shared
+    var width: CGFloat
+    var height: CGFloat
+    func body(content: Content) -> some View {
+        let visible = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1440, height: 1000)
+        let available = BudgetWindows.sheetAvailableSize ?? CGSize(width: max(320, visible.width - 64), height: max(320, visible.height - 100))
+        let size = CGSize(width: min(width * pow(store.preferences.scale, 0.4), available.width),
+                          height: min(height * pow(store.preferences.scale, 0.65), available.height))
+        content.frame(width: size.width, height: size.height)
+            .background(BeeSheetWindowSize(size: size))
+    }
+}
+
+/// SwiftUI can retain the initial native sheet frame when a form changes type.
+/// Synchronize that frame as well as the view's requested content size.
+private struct BeeSheetWindowSize: NSViewRepresentable {
+    var size: CGSize
+    func makeNSView(context: Context) -> Anchor { Anchor(size: size) }
+    func updateNSView(_ view: Anchor, context: Context) { view.requested = size; view.resizeSheet() }
+    final class Anchor: NSView {
+        var requested: CGSize
+        init(size: CGSize) { requested = size; super.init(frame: .zero) }
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); resizeSheet() }
+        func resizeSheet() {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window, window.sheetParent != nil else { return }
+                let current = window.contentRect(forFrameRect: window.frame).size
+                if abs(current.width - requested.width) > 1 || abs(current.height - requested.height) > 1 {
+                    window.setContentSize(requested)
+                }
+            }
+        }
+    }
+}
+extension View {
+    func beeSheet(width: CGFloat, height: CGFloat) -> some View { modifier(BeeSheetSize(width: width, height: height)) }
 }
