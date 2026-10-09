@@ -26,7 +26,15 @@ struct DashboardView: View {
         }
         if !pending.isEmpty { result.append(pending) }
         let count = max(1, Int((availableWidth - 52 + 18) / (320 * appearance.scale + 18)))
-        return result.flatMap { row in stride(from: 0, to: row.count, by: count).map { Array(row[$0..<min(row.count, $0 + count)]) } }
+        let rows = result.flatMap { row in stride(from: 0, to: row.count, by: count).map { Array(row[$0..<min(row.count, $0 + count)]) } }
+        // Keep the balance columns together as text grows, preserving the saved layout order.
+        return rows.flatMap { row -> [[DashboardBlock]] in
+            let cardWidth = (availableWidth - 52 - CGFloat(row.count - 1) * 18) / CGFloat(row.count)
+            if row.count > 1, row.contains(where: { $0.kind == "balances" }), cardWidth < 402 * appearance.scale + 40 {
+                return row.map { [$0] }
+            }
+            return [row]
+        }
     }
     var body: some View { if let db = model.db { ScrollView {
         VStack(alignment: .leading, spacing: 22) {
@@ -38,6 +46,7 @@ struct DashboardView: View {
                 Button("Настроить", systemImage: "rectangle.3.group") { model.sheet = SheetRoute(kind: .layout) }
                 }
             }
+            DashboardExchangeRates()
             if !db.accounts.isEmpty && !model.showGettingStarted {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) { FilterBar(filters: filters, kinds: [.expense, .income]); CurrencyPicker(title: "Валюта", selection: currency, compact: true).fixedSize() }
@@ -88,13 +97,7 @@ struct DashboardBlockView: View {
         let currency = db.settings.reportCurrency
         switch block.kind {
         case "balances":
-            if let rows = try? Reports.balances(db, filters: filters, currency: currency) {
-                if let total = try? Reports.total(rows) { PartialValue(value: total, currency: currency, large: true) }
-                Text("Текущие остатки · курс на сегодня").beeFont(.caption).foregroundStyle(BeeStyle.muted).help("Период, категории и проекты к остаткам не применяются.")
-                ForEach(rows.prefix(3)) { row in Button { if let id = row.accountIDs.first { model.openHistory(id) } } label: { HStack { Text(row.title); Spacer(); Text(BeeFormat.valuation(row.value, currency: currency)).monospacedDigit(); Image(systemName: "chevron.right").beeFont(.caption) } }.buttonStyle(BeeRowStyle()).accessibilityLabel("История счёта " + row.title) }
-                Button("Все счета →") { model.historyAccount = nil; model.section = .accounts }.buttonStyle(BeeRowStyle()).beeFont(.caption).foregroundStyle(BeeStyle.muted)
-                EmptyView()
-            }
+            DashboardAccountBalances(db: db, filters: filters)
         case "flows":
             let operations = Reports.selected(db, filters: filters, kinds: [.income, .expense])
             ViewThatFits(in: .horizontal) {

@@ -225,6 +225,30 @@ struct SheetRoute: Identifiable {
     func newOperation(_ kind: OperationKind, account: UUID? = nil) { guard !updateFrozen, !updateVerificationPending else { return }; sheet = SheetRoute(kind: .operation, operationKind: kind, accountContext: account ?? historyAccount) }
     func openHistory(_ id: UUID) { historyAccount = id; section = .accounts }
     func showOperations(_ ids: [UUID], title: String = "Операции показателя", filters: Filters = Filters()) { drilldownTitle = title; drilldownFilters = filters; drilldown = ids }
+    private var dashboardRateRefreshPending = false
+    func setDashboardCurrencies(_ codes: [String]) {
+        do {
+            try DashboardCurrencySelection.validate(codes)
+            try commit { $0.settings.dashboardCurrencies = codes }
+            refreshMissingDashboardRates()
+        } catch { self.error = error.localizedDescription }
+    }
+    func setBaseCurrency(_ code: String) {
+        do { try commit { _ = try Currency.get(code); $0.settings.baseCurrency = code }; refreshMissingDashboardRates() }
+        catch { self.error = error.localizedDescription }
+    }
+    private func refreshMissingDashboardRates() {
+        guard let db else { return }
+        let missing = DashboardCurrencySelection.requestedCurrencies(db).contains {
+            (try? Reports.resolvedRate(from: $0, to: db.settings.baseCurrency, rates: db.rates, on: .today)) == nil
+        }
+        guard missing else { return }
+        #if DEBUG && UI_SMOKE
+        return
+        #else
+        if rateBusy { dashboardRateRefreshPending = true } else { refreshRates() }
+        #endif
+    }
     func refreshRates(automatic: Bool = false) {
         guard !updateFrozen, !updateVerificationPending else { return }
         #if DEBUG && UI_SMOKE
@@ -234,14 +258,17 @@ struct SheetRoute: Identifiable {
         if automatic && (Date().timeIntervalSince(database.settings.lastRateCheck ?? .distantPast) < 3600 || Date().timeIntervalSince(lastRateAttempt) < 3600) { return }
         rateBusy = true; lastRateAttempt = Date()
         rateTask = Task { [weak self] in
-            guard let self else { return }; defer { self.rateBusy = false }
+            guard let self else { return }; defer {
+                self.rateBusy = false
+                if self.dashboardRateRefreshPending { self.dashboardRateRefreshPending = false; if !Task.isCancelled { self.refreshMissingDashboardRates() } }
+            }
             let client = RateClient(); let base = database.settings.baseCurrency
             do {
                 var values = (try? await client.cbr()) ?? []
-                for code in Set(database.accounts.map(\.currency) + ["USD", "GBP", base]) where code != base {
+                for code in DashboardCurrencySelection.requestedCurrencies(database).sorted() {
                     try Task.checkCancellation(); if try Reports.rate(from: code, to: base, rates: values, on: .today) == nil { values.append(try await client.fetch(base: code, quote: base)) }
                 }
-                try Task.checkCancellation(); guard self.db != nil, !self.updateFrozen, !self.updateVerificationPending else { return }
+                try Task.checkCancellation(); guard self.db?.id == database.id, !self.updateFrozen, !self.updateVerificationPending else { return }
                 try self.vault.transaction { db in for r in values { db.rates.removeAll { $0.base == r.base && $0.quote == r.quote && $0.date == r.date && $0.provider == r.provider }; db.rates.append(r) }; db.settings.lastRateCheck = Date() }
                 self.db = self.vault.db; self.refreshFinancialForecasts(); self.rateError = nil; self.showNotice("Курсы обновлены", kind: .success)
             } catch is CancellationError {} catch { if self.db != nil { let message = "Курсы не обновлены: " + error.localizedDescription + " Кеш сохранён; доступен ручной курс."; self.rateError = message; self.showNotice(message, kind: .warning) } }

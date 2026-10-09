@@ -34,7 +34,7 @@ struct SettingsView: View {
         case .appearance: AppearanceSettingsView()
         case .general:
             VStack(alignment: .leading, spacing: 16) {
-                CurrencyPicker(title: "Базовая валюта", selection: Binding(get: { model.db?.settings.baseCurrency ?? "RUB" }, set: { currency in model.perform { $0.settings.baseCurrency = currency } }))
+                CurrencyPicker(title: "Базовая валюта", selection: Binding(get: { model.db?.settings.baseCurrency ?? "RUB" }, set: { currency in model.setBaseCurrency(currency) }))
                 Text("Валюта новых счетов и сводки по умолчанию. Валюты существующих счетов, планов и сохранённые снимки сохраняются.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             }.beeCard()
             Text("Версия \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") · Обновления доступны в меню BeeSave.").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted)
@@ -46,6 +46,7 @@ struct SettingsView: View {
                 Text("При блокировке Mac и сне данные скрываются. Незавершённые формы закрываются.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             }.beeCard()
         case .rates:
+            DashboardCurrencySettings()
             VStack(alignment: .leading, spacing: 14) {
                 if let error = model.rateError { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(BeeStyle.negative).fixedSize(horizontal: false, vertical: true) }
                 Text("Последняя проверка: " + (db.settings.lastRateCheck?.formatted(date: .numeric, time: .shortened) ?? "ещё не выполнялась")).beeFont(.caption).foregroundStyle(BeeStyle.muted)

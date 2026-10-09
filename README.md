@@ -2,7 +2,7 @@
 
 Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-BeeSave 1.6 adds a native Liquid Glass interface, a compact unlock window, a larger workspace, and brief notifications that disappear automatically.
+BeeSave 1.7 shows each account balance in its own currency alongside its value in your base currency. The Home page also shows exchange rates; choose up to five currencies in Settings → Currencies and Rates.
 
 BeeSave brings your accounts, income, expenses, transfers, budgets, and reports together in one place. It supports multiple currencies, CSV import and export, encrypted storage, and full backups.
 

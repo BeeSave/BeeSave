@@ -25,20 +25,23 @@ private struct BudgetMatcher {
 }
 public enum Reports {
     public static func rate(from: String, to: String, rates: [FXRate], on day: Day) throws -> String? {
-        if from == to { return "1" }
+        try resolvedRate(from: from, to: to, rates: rates, on: day)?.value
+    }
+    public static func resolvedRate(from: String, to: String, rates: [FXRate], on day: Day) throws -> ResolvedRate? {
+        if from == to { return ResolvedRate(value: "1", date: nil, provider: nil) }
         let eligible = rates.filter { $0.date <= day }.sorted { $0.date == $1.date ? $0.fetchedAt > $1.fetchedAt : $0.date > $1.date }
-        if let r = eligible.first(where: { $0.base == from && $0.quote == to }) { return r.rate }
-        if let r = eligible.first(where: { $0.base == to && $0.quote == from }) { return NSDecimalNumber(decimal: try Money.divide(1, Money.decimal(r.rate))).stringValue }
+        if let r = eligible.first(where: { $0.base == from && $0.quote == to }) { return ResolvedRate(value: r.rate, date: r.date, provider: r.provider) }
+        if let r = eligible.first(where: { $0.base == to && $0.quote == from }) { return ResolvedRate(value: NSDecimalNumber(decimal: try Money.divide(1, Money.decimal(r.rate))).stringValue, date: r.date, provider: r.provider) }
         for a in eligible {
             if a.base == from, let b = eligible.first(where: { $0.base == to && $0.quote == a.quote && $0.date == a.date && $0.provider == a.provider }) {
-                return NSDecimalNumber(decimal: try Money.divide(Money.decimal(a.rate), Money.decimal(b.rate))).stringValue
+                return ResolvedRate(value: NSDecimalNumber(decimal: try Money.divide(Money.decimal(a.rate), Money.decimal(b.rate))).stringValue, date: a.date, provider: a.provider)
             }
             let aTo: String; let aRate: Decimal
             if a.base == from { aTo = a.quote; aRate = try Money.decimal(a.rate) }
             else if a.quote == from { aTo = a.base; aRate = try Money.divide(1, Money.decimal(a.rate)) } else { continue }
             if let b = eligible.first(where: { $0.date == a.date && $0.provider == a.provider && (($0.base == aTo && $0.quote == to) || ($0.quote == aTo && $0.base == to)) }) {
                 let br = try b.base == aTo ? Money.decimal(b.rate) : Money.divide(1, Money.decimal(b.rate))
-                return NSDecimalNumber(decimal: try Money.multiply(aRate, br)).stringValue
+                return ResolvedRate(value: NSDecimalNumber(decimal: try Money.multiply(aRate, br)).stringValue, date: a.date, provider: a.provider)
             }
         }
         return nil
@@ -91,14 +94,7 @@ public enum Reports {
         return result
     }
     public static func balances(_ db: Database, filters: Filters, currency: String, day: Day = .today) throws -> [ReportRow] {
-        var amounts: [UUID: Int64] = [:]
-        for o in db.operations where o.date <= day { amounts[o.accountID] = try Money.add(amounts[o.accountID] ?? 0, o.posting(for: o.accountID)); if let to = o.toAccountID { amounts[to] = try Money.add(amounts[to] ?? 0, o.posting(for: to)) } }
-        return try db.accounts.filter { (filters.accounts.isEmpty || filters.accounts.contains($0.id)) && (filters.includeArchived || !$0.archived) && (filters.currency == nil || filters.currency == $0.currency) && $0.openedOn <= day }.map { a in
-            var v = Valuation(); v.count = 1
-            if let rate = try rate(from: a.currency, to: currency, rates: db.rates, on: day) { v.known = try Money.convert(amounts[a.id] ?? 0, from: a.currency, to: currency, rate: rate) }
-            else { v.missing = [a.id]; v.currencies = [a.currency] }
-            var row = ReportRow(id: a.id.uuidString, title: a.name, value: v); row.accountIDs = [a.id]; return row
-        }
+        try accountBalances(db, filters: filters, currency: currency, day: day).map(\.reportRow)
     }
     public static func total(_ rows: [ReportRow]) throws -> Valuation { try rows.reduce(Valuation()) { v, row in var r = v; r.known = try Money.add(r.known, row.value.known); r.missing += row.value.missing; r.missingConditions += row.value.missingConditions; r.currencies.formUnion(row.value.currencies); r.count += row.value.count; return r } }
     public static func budgetFact(_ b: Budget, db: Database, lineID: UUID? = nil, filters: Filters? = nil) throws -> Valuation {

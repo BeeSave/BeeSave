@@ -81,6 +81,32 @@ private struct Transport: AppUpdateTransport {
         check(BudgetWindows.preferred(ordered: [settingsWindow, budgetWindow], key: settingsWindow) == nil,
               "notification does not select unrelated or detached windows")
         let model = AppModel()
+        model.setDashboardCurrencies(["RUB", "USD", "GBP", "EUR", "JPY"])
+        check(model.db?.settings.selectedDashboardCurrencies.count == 5, "dashboard selection is saved through the real encrypted model")
+        let currencyBytes = try Data(contentsOf: model.vault.url)
+        model.setDashboardCurrencies(["RUB", "USD", "GBP", "EUR", "JPY", "CHF"])
+        check(try Data(contentsOf: model.vault.url) == currencyBytes && model.error != nil, "sixth currency is rejected without writing the vault")
+        model.error = nil
+        model.setDashboardCurrencies([])
+        check(model.db?.settings.selectedDashboardCurrencies == [], "explicit empty selection remains hidden")
+        let emptyCurrencies = model.db
+        model.vault.beforeWrite = { throw BudgetError.storage("Fictional settings write failure") }
+        model.setDashboardCurrencies(["USD"])
+        check(model.db == emptyCurrencies && model.error != nil, "failed settings write preserves prior selection")
+        model.vault.beforeWrite = nil; model.error = nil
+        model.setBaseCurrency("USD")
+        check(model.db?.settings.baseCurrency == "USD" && model.db?.accounts.last?.currency == "USD", "base currency changes without changing account currencies")
+        model.loadPreview(.filled)
+        let rateCache = model.db?.rates
+        let rateCheck = model.db?.settings.lastRateCheck
+        model.notice = nil
+        model.refreshRates()
+        check(model.rateBusy, "manual rate update exposes a loading state")
+        let cancelledRateTask = model.rateTask
+        cancelledRateTask?.cancel()
+        await cancelledRateTask?.value
+        check(!model.rateBusy && model.db?.rates == rateCache && model.db?.settings.lastRateCheck == rateCheck && model.notice == nil,
+              "cancelled rate update retains cache and cannot report success")
         let raw = try Data(contentsOf: model.vault.url)
         let gate = try ReleaseGate()
         let updater = InstallUpdateManager(client: AppUpdateClient(transport: Transport(gate: gate)))

@@ -74,6 +74,9 @@ public struct ImportBatch: Codable, Identifiable, Equatable, Sendable {
     public init(fingerprint: String, added: [UUID], skipped: Int, excluded: Int) { self.fingerprint = fingerprint; self.added = added; self.skipped = skipped; self.excluded = excluded }
 }
 public struct AppSettings: Codable, Equatable, Sendable {
+    // Optional storage preserves decoding of existing budgets and an explicit empty selection.
+    public var dashboardCurrencies: [String]?
+    public var selectedDashboardCurrencies: [String] { dashboardCurrencies ?? ["RUB", "USD", "GBP"] }
     public var baseCurrency = "RUB"; public var reportCurrency = "RUB"; public var lockMinutes = 5; public var dashboardFilters = Filters.month; public var backupPath: String?; public var backupBookmark: Data?; public var lastBackup: Date?; public var lastDaily: Day?; public var lastRateCheck: Date?
     public init() {}
 }

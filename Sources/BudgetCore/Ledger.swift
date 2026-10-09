@@ -172,6 +172,7 @@ public enum Ledger {
         for r in db.rates { try validateRate(r) }
         for r in db.reports { try Reports.validate(r, db: db) }
         _ = try Currency.get(db.settings.baseCurrency); _ = try Currency.get(db.settings.reportCurrency)
+        try DashboardCurrencySelection.validate(db.settings.selectedDashboardCurrencies)
         for block in db.dashboard { if let id = block.reportID { guard db.reports.contains(where: { $0.id == id }) else { throw BudgetError.corrupt } }; if let f = block.ownFilters { try Reports.validateFilters(f, db: db) } }
         try Reports.validateFilters(db.settings.dashboardFilters, db: db)
         try FinancialLedger.validate(db)
