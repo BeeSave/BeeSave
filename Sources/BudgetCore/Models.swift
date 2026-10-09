@@ -76,7 +76,16 @@ public struct ImportBatch: Codable, Identifiable, Equatable, Sendable {
 public struct AppSettings: Codable, Equatable, Sendable {
     // Optional storage preserves decoding of existing budgets and an explicit empty selection.
     public var dashboardCurrencies: [String]?
-    public var selectedDashboardCurrencies: [String] { dashboardCurrencies ?? ["RUB", "USD", "GBP"] }
+    public var dashboardCurrenciesVersion: Int? = 2
+    public var selectedDashboardCurrencies: [String] {
+        let legacyDefault = dashboardCurrenciesVersion == nil && dashboardCurrencies == ["RUB", "USD", "GBP"]
+        return (legacyDefault ? ["USD", "GBP"] : dashboardCurrencies ?? ["USD", "GBP"]).filter { $0 != baseCurrency }
+    }
+    public mutating func normalizeDashboardCurrencies() {
+        if dashboardCurrenciesVersion == nil && dashboardCurrencies == ["RUB", "USD", "GBP"] { dashboardCurrencies = nil }
+        if let codes = dashboardCurrencies { dashboardCurrencies = codes.filter { $0 != baseCurrency } }
+        dashboardCurrenciesVersion = 2
+    }
     public var baseCurrency = "RUB"; public var reportCurrency = "RUB"; public var lockMinutes = 5; public var dashboardFilters = Filters.month; public var backupPath: String?; public var backupBookmark: Data?; public var lastBackup: Date?; public var lastDaily: Day?; public var lastRateCheck: Date?
     public init() {}
 }

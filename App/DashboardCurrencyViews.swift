@@ -10,47 +10,99 @@ private func rateDescription(_ rate: ResolvedRate) -> String {
 struct DashboardExchangeRates: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.beeAppearance) private var appearance
-    @Environment(\.openSettings) private var openSettings
+    var wrapping = true
     var body: some View {
         if let db = model.db, !db.settings.selectedDashboardCurrencies.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Курсы валют").beeFont(.headline)
-                    if model.rateBusy { ProgressView().controlSize(.small).accessibilityLabel("Обновление курсов") }
-                    Spacer()
-                    Button("Настроить") { model.settingsTask = .rates; openSettings() }.buttonStyle(BeeRowStyle()).focusable().onKeyPress(keys: [.return, .space]) { _ in model.settingsTask = .rates; openSettings(); return .handled }
-                }
-                Text("В основной валюте · " + db.settings.baseCurrency).beeFont(.caption).foregroundStyle(BeeStyle.muted)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180 * appearance.scale), alignment: .leading)], alignment: .leading, spacing: 12) {
-                    ForEach(db.settings.selectedDashboardCurrencies, id: \.self) { code in
-                        ExchangeRatePosition(code: code, base: db.settings.baseCurrency, rates: db.rates)
-                    }
-                }
-                if let error = model.rateError { Label(error, systemImage: "exclamationmark.triangle").beeFont(.caption).foregroundStyle(BeeStyle.warning).fixedSize(horizontal: false, vertical: true) }
-            }.frame(maxWidth: .infinity, alignment: .leading).beeCard()
+            if wrapping {
+                DashboardRateLayout(spacing: 12 * appearance.scale) { positions(db) }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } else { HStack(spacing: 12 * appearance.scale) { positions(db) } }
+        }
+    }
+    @ViewBuilder private func positions(_ db: Database) -> some View {
+        ForEach(db.settings.selectedDashboardCurrencies, id: \.self) { code in
+            ExchangeRatePosition(code: code, base: db.settings.baseCurrency, rates: db.rates)
         }
     }
 }
 
+/// Each wrapped row shares the right edge of the dashboard cards.
+private struct DashboardRateLayout: Layout {
+    var spacing: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? subviews.reduce(0) { $0 + $1.sizeThatFits(.unspecified).width + spacing }
+        return CGSize(width: width, height: rows(width, subviews).last.map { $0.y + $0.height } ?? 0)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for row in rows(bounds.width, subviews) {
+            var x = bounds.maxX - row.width
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+                subviews[index].place(at: CGPoint(x: x, y: bounds.minY + row.y + (row.height - size.height) / 2), proposal: ProposedViewSize(width: size.width, height: size.height))
+                x += size.width + spacing
+            }
+        }
+    }
+    private struct Row { var indices: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0; var y: CGFloat = 0 }
+    private func rows(_ width: CGFloat, _ subviews: Subviews) -> [Row] {
+        var result: [Row] = []; var row = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
+            let gap = row.indices.isEmpty ? 0 : spacing
+            if !row.indices.isEmpty && row.width + gap + size.width > width {
+                result.append(row); row = Row(y: row.y + row.height + spacing)
+            }
+            row.width += (row.indices.isEmpty ? 0 : spacing) + size.width
+            row.height = max(row.height, size.height); row.indices.append(index)
+        }
+        if !row.indices.isEmpty { result.append(row) }
+        return result
+    }
+}
+
 private struct ExchangeRatePosition: View {
+    @Environment(\.beeAppearance) private var appearance
+    @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
+    @EnvironmentObject private var model: AppModel
+    private var reduceTransparency: Bool {
+        #if DEBUG && UI_SMOKE
+        return systemReduceTransparency || model.previewReduceTransparency
+        #else
+        return systemReduceTransparency
+        #endif
+    }
     var code: String
     var base: String
     var rates: [FXRate]
     private var result: Result<ResolvedRate?, Error> { Result { try Reports.resolvedRate(from: code, to: base, rates: rates, on: .today) } }
+    private var title: String {
+        switch result {
+        case .success(let rate?): return "1 \(code) = \(DisplayFormat.rate(rate.value)) \(base)"
+        case .success(nil): return "\(code) → \(base) · Нет курса"
+        case .failure: return "\(code) → \(base) · Ошибка курса"
+        }
+    }
+    private var detail: String {
+        switch result {
+        case .success(let rate?): return rateDescription(rate)
+        case .success(nil): return "Нет доступного курса. Обновите или добавьте курс в настройках «Валюты и курсы»."
+        case .failure(let error): return error.localizedDescription
+        }
+    }
+    private var stale: Bool { if case .success(let rate?) = result { return rate.stale() }; return false }
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            switch result {
-            case .success(let rate?):
-                Text("1 \(code) = \(DisplayFormat.rate(rate.value)) \(base)").beeFont(.subheadline.weight(.medium)).monospacedDigit().fixedSize(horizontal: false, vertical: true)
-                Text(rateDescription(rate)).beeFont(.caption).foregroundStyle(rate.stale() ? BeeStyle.warning : BeeStyle.muted).fixedSize(horizontal: false, vertical: true)
-            case .success(nil):
-                Text("1 \(code) → \(base)").beeFont(.subheadline.weight(.medium))
-                Text("Нет курса").beeFont(.caption).foregroundStyle(BeeStyle.warning)
-            case .failure:
-                Text("\(code) → \(base)").beeFont(.subheadline.weight(.medium))
-                Text("Ошибка расчёта курса").beeFont(.caption).foregroundStyle(BeeStyle.negative)
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
+        Group {
+            if reduceTransparency { content.background(BeeStyle.surface, in: .capsule).overlay { Capsule().strokeBorder(BeeStyle.line, lineWidth: 1) } }
+            else { content.glassEffect(.regular, in: .capsule) }
+        }.help(title + " · " + detail)
+            .accessibilityElement(children: .ignore).accessibilityLabel(title).accessibilityValue(detail)
+    }
+    private var content: some View {
+        HStack(spacing: 6 * appearance.scale) {
+            Text(title).monospacedDigit().fixedSize(horizontal: false, vertical: true)
+            if stale { Image(systemName: "exclamationmark.triangle").foregroundStyle(BeeStyle.warning).accessibilityHidden(true) }
+        }.beeFont(.body).foregroundStyle(BeeStyle.onBackground)
+            .padding(.horizontal, 16 * appearance.scale).padding(.vertical, 10 * appearance.scale)
     }
 }
 
@@ -59,10 +111,11 @@ struct DashboardCurrencySettings: View {
     @State private var search = ""
     @State private var choosing = false
     private var selected: [String] { model.db?.settings.selectedDashboardCurrencies ?? [] }
+    private var base: String { model.db?.settings.baseCurrency ?? "RUB" }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack { Text("Валюты на Главной").beeFont(.headline); Spacer(); Text("\(selected.count) из 5").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
-            Text("Курсы относительно базовой валюты. Можно выбрать до 5 валют.").beeFont(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true)
+            Text("Курсы относительно базовой валюты. До 5 валют; основная валюта исключена.").beeFont(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true)
             if selected.isEmpty { Text("Курсы на Главной скрыты").foregroundStyle(BeeStyle.muted) }
             ForEach(selected, id: \.self) { code in
                 HStack {
@@ -79,8 +132,8 @@ struct DashboardCurrencySettings: View {
                         ScrollView { LazyVStack(alignment: .leading) {
                             ForEach(Currency.catalog.filter { search.isEmpty || $0.label.localizedCaseInsensitiveContains(search) }) { currency in
                                 Button { model.setDashboardCurrencies(selected + [currency.code]); choosing = false } label: {
-                                    HStack { Text(currency.label); Spacer(); if selected.contains(currency.code) { Image(systemName: "checkmark") } }
-                                }.buttonStyle(BeeRowStyle()).focusable().onKeyPress(keys: [.return, .space]) { _ in guard !selected.contains(currency.code), selected.count < DashboardCurrencySelection.limit else { return .ignored }; model.setDashboardCurrencies(selected + [currency.code]); choosing = false; return .handled }.disabled(selected.contains(currency.code) || selected.count >= DashboardCurrencySelection.limit).padding(5)
+                                    HStack { Text(currency.label); Spacer(); if selected.contains(currency.code) { Image(systemName: "checkmark") }; if currency.code == base { Text("Основная валюта").beeFont(.caption).foregroundStyle(BeeStyle.muted) } }
+                                }.buttonStyle(BeeRowStyle()).focusable().onKeyPress(keys: [.return, .space]) { _ in guard currency.code != base, !selected.contains(currency.code), selected.count < DashboardCurrencySelection.limit else { return .ignored }; model.setDashboardCurrencies(selected + [currency.code]); choosing = false; return .handled }.disabled(currency.code == base || selected.contains(currency.code) || selected.count >= DashboardCurrencySelection.limit).padding(5)
                             }
                         } }.frame(height: 260)
                         Button("Отмена") { choosing = false }.keyboardShortcut(.cancelAction)
@@ -119,15 +172,15 @@ struct DashboardAccountBalances: View {
         }
     }
     private func balancesTable(_ rows: [AccountBalanceRow]) -> some View {
-        let originalWidth = amountWidth(rows.map { DisplayFormat.money($0.amount, currency: $0.account.currency) })
-        let convertedWidth = amountWidth(rows.map { $0.value.partial ? "Нет курса" : DisplayFormat.money($0.value.known, currency: db.settings.baseCurrency) })
+        let originalWidth = amountWidth(rows.map { DisplayFormat.money($0.amount, currency: $0.account.currency) }, header: "В валюте счёта")
+        let convertedWidth = amountWidth(rows.map { $0.value.partial ? "Нет курса" : DisplayFormat.money($0.value.known, currency: db.settings.baseCurrency) }, header: "В основной валюте")
         let nameWidth = max(120 * appearance.scale, tableWidth - originalWidth - convertedWidth - 62)
         return ScrollView(.horizontal) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .bottom, spacing: 16) {
                     Text("Счёт").frame(width: nameWidth, alignment: .leading)
-                    Text("В валюте\nсчёта").frame(width: originalWidth, alignment: .trailing)
-                    Text("В основной\nвалюте (\(db.settings.baseCurrency))").frame(width: convertedWidth, alignment: .trailing)
+                    Text("В валюте счёта").fixedSize().frame(width: originalWidth, alignment: .trailing)
+                    Text("В основной валюте").fixedSize().frame(width: convertedWidth, alignment: .trailing).help("Основная валюта: " + db.settings.baseCurrency).accessibilityLabel("В основной валюте, " + db.settings.baseCurrency)
                     Color.clear.frame(width: 14)
                 }.beeFont(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true)
                 Divider()
@@ -154,8 +207,10 @@ struct DashboardAccountBalances: View {
             }.padding(.bottom, 4).fixedSize(horizontal: false, vertical: true)
         }.onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tableWidth = $0 }
     }
-    private func amountWidth(_ values: [String]) -> CGFloat {
+    private func amountWidth(_ values: [String], header: String) -> CGFloat {
         let font = NSFont.monospacedDigitSystemFont(ofSize: 15 * appearance.scale, weight: .regular)
-        return max(110 * appearance.scale, values.map { ($0 as NSString).size(withAttributes: [.font: font]).width + 4 }.max() ?? 0)
+        let headerFont = NSFont.systemFont(ofSize: BeeFont.caption.size * appearance.scale)
+        let headerWidth = (header as NSString).size(withAttributes: [.font: headerFont]).width + 4
+        return max(110 * appearance.scale, headerWidth, values.map { ($0 as NSString).size(withAttributes: [.font: font]).width + 4 }.max() ?? 0)
     }
 }

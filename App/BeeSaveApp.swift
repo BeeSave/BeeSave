@@ -115,6 +115,9 @@ struct RootView: View {
             Menu("Тестовые состояния") { ForEach(PreviewScenario.allCases, id: \.self) { state in Button(state.title) { model.loadPreview(state) } }; Divider(); Button("Замер · Главная") { model.measureFixturePresentation(.dashboard) }; Button("Замер · Счета") { model.measureFixturePresentation(.accounts) }; Button("Замер · Календарь") { model.measureFixturePresentation(.financialCalendar) }; Button("Замер · Платёж") { model.measureFixturePayment() }; Divider(); Button("Логотипы банков…") { showBankBrands = true }; Button("Светлая тема") { model.previewAppearance = .light; appearanceStore.previewColorScheme = .light }; Button("Тёмная тема") { model.previewAppearance = .dark; appearanceStore.previewColorScheme = .dark }; Button("Системная тема") { model.previewAppearance = nil; appearanceStore.previewColorScheme = nil }; Divider(); Button("Минимальное окно 1000 × 700") { BudgetWindows.preferred(ordered: NSApp.orderedWindows + NSApp.windows, key: NSApp.keyWindow)?.setContentSize(NSSize(width: 1000, height: 700)) }; Button("Обычное окно 1260 × 840") { BudgetWindows.preferred(ordered: NSApp.orderedWindows + NSApp.windows, key: NSApp.keyWindow)?.setContentSize(NSSize(width: 1260, height: 840)) } }
             Divider()
             Menu("Валюты QA") {
+                Button("Согласованная Главная · 017") { model.prepareHome017QA() }
+                Button("Снижение прозрачности · Вкл") { model.previewReduceTransparency = true }
+                Button("Снижение прозрачности · Выкл") { model.previewReduceTransparency = false }
                 Button("Длинные суммы и старые курсы") { model.prepareDashboardCurrencyQA(overflow: false) }
                 Button("Ошибка расчёта остатков") { model.prepareDashboardCurrencyQA(overflow: true) }
             }

@@ -3,11 +3,19 @@ import Foundation
 import BudgetCore
 
 extension AppModel {
+    func prepareHome017QA() {
+        loadPreview(.filled)
+        perform { db in
+            db.settings.reportCurrency = "GBP"
+            db.rates.append(FXRate(base: "GBP", quote: "RUB", rate: "120", date: .today))
+        }
+    }
+
     func prepareDashboardCurrencyQA(overflow: Bool) {
         guard root.lastPathComponent.hasPrefix("BeeSaveSmoke-") else { return }
         loadPreview(.empty)
         perform { db in
-            db.settings.dashboardCurrencies = ["RUB", "USD", "GBP", "JPY", "KWD"]
+            db.settings.dashboardCurrencies = ["USD", "GBP", "JPY", "KWD", "EUR"]
             for (name, code, amount) in [
                 ("Очень длинное название вымышленного долларового счёта для проверки переноса", "USD", Int64(-123_456_789_012)),
                 ("Йены · вымышленный счёт", "JPY", 999_999_999),

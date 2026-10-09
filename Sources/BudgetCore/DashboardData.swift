@@ -2,10 +2,11 @@ import Foundation
 
 public enum DashboardCurrencySelection {
     public static let limit = 5
-    public static func validate(_ codes: [String]) throws {
+    public static func validate(_ codes: [String], baseCurrency: String? = nil) throws {
         guard codes.count <= limit else { throw BudgetError.invalid("На Главной можно показать не более 5 валют.") }
         guard Set(codes).count == codes.count else { throw BudgetError.invalid("Валюта уже выбрана.") }
         for code in codes { _ = try Currency.get(code) }
+        if let baseCurrency, codes.contains(baseCurrency) { throw BudgetError.invalid("Основная валюта не показывается в списке курсов на Главной.") }
     }
     public static func requestedCurrencies(_ db: Database) -> Set<String> {
         Set(db.accounts.map(\.currency) + db.settings.selectedDashboardCurrencies + ["USD", "GBP", db.settings.baseCurrency])

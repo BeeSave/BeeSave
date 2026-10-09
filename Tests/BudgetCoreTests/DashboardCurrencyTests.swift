@@ -102,16 +102,16 @@ final class DashboardCurrencyTests: XCTestCase {
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         var settings = try XCTUnwrap(json["settings"] as? [String: Any]); settings.removeValue(forKey: "dashboardCurrencies"); json["settings"] = settings
         let old = try JSONDecoder().decode(Database.self, from: JSONSerialization.data(withJSONObject: json))
-        XCTAssertEqual(old.settings.selectedDashboardCurrencies, ["RUB", "USD", "GBP"])
+        XCTAssertEqual(old.settings.selectedDashboardCurrencies, ["USD", "GBP"])
         var db = old; db.settings.dashboardCurrencies = []
         XCTAssertEqual(try JSONDecoder().decode(Database.self, from: JSONEncoder().encode(db)).settings.selectedDashboardCurrencies, [])
-        db.settings.dashboardCurrencies = ["RUB", "USD", "GBP", "EUR", "JPY"]; XCTAssertNoThrow(try Ledger.validate(db))
-        db.settings.dashboardCurrencies?.append("CHF"); XCTAssertThrowsError(try Ledger.validate(db))
+        db.settings.dashboardCurrencies = ["USD", "GBP", "EUR", "JPY", "CHF"]; XCTAssertNoThrow(try Ledger.validate(db))
+        db.settings.dashboardCurrencies?.append("AUD"); XCTAssertThrowsError(try Ledger.validate(db))
         db.settings.dashboardCurrencies = ["USD", "USD"]; XCTAssertThrowsError(try Ledger.validate(db))
         db.settings.dashboardCurrencies = ["XXX"]; XCTAssertThrowsError(try Ledger.validate(db))
     }
     func testSelectedPairsWithoutAccountsAndEncryptedBackup() throws {
-        var db = Database(); db.settings.dashboardCurrencies = ["RUB", "EUR", "JPY", "KWD", "GBP"]
+        var db = Database(); db.settings.dashboardCurrencies = ["USD", "EUR", "JPY", "KWD", "GBP"]
         XCTAssertTrue(DashboardCurrencySelection.requestedCurrencies(db).isSuperset(of: ["EUR", "JPY", "KWD", "GBP"]))
         XCTAssertFalse(DashboardCurrencySelection.requestedCurrencies(db).contains("RUB"))
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -124,4 +124,47 @@ final class DashboardCurrencyTests: XCTestCase {
         try store.transaction { $0.settings.dashboardCurrencies = [] }; store.close(); try store.unlock(key: key)
         XCTAssertEqual(store.db?.settings.selectedDashboardCurrencies, [])
     }
+    func testLegacyDefaultCustomSelectionAndBaseChanges() throws {
+        var settings = AppSettings(); settings.dashboardCurrenciesVersion = nil
+        settings.dashboardCurrencies = ["RUB", "USD", "GBP"]
+        XCTAssertEqual(settings.selectedDashboardCurrencies, ["USD", "GBP"])
+        settings.normalizeDashboardCurrencies()
+        XCTAssertNil(settings.dashboardCurrencies)
+        settings.baseCurrency = "USD"; XCTAssertEqual(settings.selectedDashboardCurrencies, ["GBP"])
+        settings.baseCurrency = "GBP"; XCTAssertEqual(settings.selectedDashboardCurrencies, ["USD"])
+        settings.baseCurrency = "EUR"; XCTAssertEqual(settings.selectedDashboardCurrencies, ["USD", "GBP"])
+        settings.dashboardCurrencies = ["RUB", "USD", "GBP"]
+        // A current explicit choice is not misclassified as the old default.
+        XCTAssertEqual(settings.selectedDashboardCurrencies, ["RUB", "USD", "GBP"])
+        settings.baseCurrency = "USD"; settings.normalizeDashboardCurrencies()
+        XCTAssertEqual(settings.dashboardCurrencies, ["RUB", "GBP"])
+        settings.baseCurrency = "EUR"; XCTAssertEqual(settings.selectedDashboardCurrencies, ["RUB", "GBP"])
+        settings.dashboardCurrencies = []; settings.normalizeDashboardCurrencies()
+        XCTAssertEqual(settings.selectedDashboardCurrencies, [])
+        XCTAssertThrowsError(try DashboardCurrencySelection.validate(["EUR"], baseCurrency: "EUR"))
+        var db = Database(); db.settings.dashboardCurrencies = ["RUB"]
+        XCTAssertThrowsError(try Ledger.validate(db))
+        db.settings.dashboardCurrenciesVersion = nil
+        XCTAssertNoThrow(try Ledger.validate(db)) // Existing 1.7 bases remain readable.
+        db.settings.normalizeDashboardCurrencies(); XCTAssertNoThrow(try Ledger.validate(db))
+        XCTAssertEqual(db.settings.selectedDashboardCurrencies, [])
+    }
+    func testOldSelectionSurvivesEncryptedUnlockAndFullBackup() throws {
+        var db = Database(); db.settings.dashboardCurrenciesVersion = nil
+        db.settings.dashboardCurrencies = ["RUB", "USD", "GBP"]
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = VaultStore(url: root.appendingPathComponent("vault.beesave"))
+        defer { store.close(); try? FileManager.default.removeItem(at: root) }
+        let key = try VaultCrypto.random(), recovery = try VaultCrypto.random()
+        try store.initialize(db: db, dataKey: key, bootstrap: Bootstrap(databaseID: db.id, password: nil, recovery: try VaultCrypto.seal(key, key: recovery, context: VaultCrypto.recoveryContext)))
+        store.close(); try store.unlock(key: key)
+        XCTAssertEqual(store.db?.settings.selectedDashboardCurrencies, ["USD", "GBP"])
+        try store.transaction { $0.settings.normalizeDashboardCurrencies() }
+        let copy = root.appendingPathComponent("copy.mubak"); try store.backup(to: copy)
+        let restored = try VaultFile.read(Data(contentsOf: copy)).decrypt(key: key)
+        XCTAssertEqual(restored.settings.selectedDashboardCurrencies, ["USD", "GBP"])
+        XCTAssertNil(restored.settings.dashboardCurrencies)
+        XCTAssertEqual(restored.settings.dashboardCurrenciesVersion, 2)
+    }
+
 }

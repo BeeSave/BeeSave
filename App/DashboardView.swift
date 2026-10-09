@@ -13,7 +13,6 @@ struct DashboardView: View {
     @Environment(\.beeAppearance) private var appearance
     @State private var availableWidth: CGFloat = 950
     var filters: Binding<Filters> { Binding(get: { model.db?.settings.dashboardFilters ?? .month }, set: { f in model.perform { $0.settings.dashboardFilters = f } }) }
-    var currency: Binding<String> { Binding(get: { model.db?.settings.reportCurrency ?? "RUB" }, set: { c in model.perform { $0.settings.reportCurrency = c } }) }
     var gridRows: [[DashboardBlock]] {
         var result: [[DashboardBlock]] = []; var pending: [DashboardBlock] = []
         for block in model.db?.dashboard.filter(\.visible) ?? [] {
@@ -46,13 +45,19 @@ struct DashboardView: View {
                 Button("Настроить", systemImage: "rectangle.3.group") { model.sheet = SheetRoute(kind: .layout) }
                 }
             }
-            DashboardExchangeRates()
             if !db.accounts.isEmpty && !model.showGettingStarted {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 20) { FilterBar(filters: filters, kinds: [.expense, .income]); CurrencyPicker(title: "Валюта", selection: currency, compact: true).fixedSize() }
-                    VStack(alignment: .leading, spacing: 12) { FilterBar(filters: filters, kinds: [.expense, .income]); CurrencyPicker(title: "Валюта", selection: currency, compact: true) }
+                    HStack(alignment: .firstTextBaseline, spacing: 20 * appearance.scale) {
+                        FilterBar(filters: filters, kinds: [.expense, .income]).fixedSize(horizontal: true, vertical: false)
+                        Spacer(minLength: 20 * appearance.scale)
+                        DashboardExchangeRates(wrapping: false).fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 12 * appearance.scale) {
+                        FilterBar(filters: filters, kinds: [.expense, .income])
+                        DashboardExchangeRates()
+                    }
                 }
-            }
+            } else { DashboardExchangeRates() }
             FinancialDashboardSummary()
             ScheduledDashboardSummary()
             if db.accounts.isEmpty || model.showGettingStarted {
@@ -94,7 +99,7 @@ struct DashboardBlockView: View {
         }.frame(maxWidth: .infinity, alignment: .leading).beeCard()
     } }
     @ViewBuilder private func content(db: Database, filters: Filters) -> some View {
-        let currency = db.settings.reportCurrency
+        let currency = db.settings.baseCurrency
         switch block.kind {
         case "balances":
             DashboardAccountBalances(db: db, filters: filters)
@@ -111,8 +116,8 @@ struct DashboardBlockView: View {
             var selected = filters; let _ = selected.participation = block.kind == "outside" ? .outside : selected.participation
             let report = standardReport(metric: .expense, grouping: .category, filters: selected, db: db)
             if let rows = try? Reports.rows(report, db: db), !rows.isEmpty {
-                ForEach(rows.sorted { $0.value.known > $1.value.known }.prefix(block.kind == "outside" ? 3 : 5)) { row in Button { model.showOperations(row.operationIDs, title: row.title, filters: selected) } label: { HStack { Text(row.title).lineLimit(1); Spacer(); Text(BeeFormat.valuation(row.value, currency: currency)).monospacedDigit(); Image(systemName: "chevron.right").beeFont(.caption) } }.buttonStyle(BeeRowStyle()) }
-                Button("Все расходы →") { model.showOperations(Reports.selected(db, filters: selected, kinds: [.expense]).map(\.id), title: dashboardTitle(block, db: db), filters: selected) }.buttonStyle(BeeRowStyle()).beeFont(.caption).foregroundStyle(BeeStyle.muted)
+                ForEach(rows.sorted { $0.value.known > $1.value.known }.prefix(block.kind == "outside" ? 3 : 5)) { row in Button { model.showOperations(row.operationIDs, title: row.title, filters: selected, currency: currency) } label: { HStack { Text(row.title).lineLimit(1); Spacer(); Text(BeeFormat.valuation(row.value, currency: currency)).monospacedDigit(); Image(systemName: "chevron.right").beeFont(.caption) } }.buttonStyle(BeeRowStyle()) }
+                Button("Все расходы →") { model.showOperations(Reports.selected(db, filters: selected, kinds: [.expense]).map(\.id), title: dashboardTitle(block, db: db), filters: selected, currency: currency) }.buttonStyle(BeeRowStyle()).beeFont(.caption).foregroundStyle(BeeStyle.muted)
             } else { Text("Нет расходов в выбранной выборке").beeFont(.subheadline).foregroundStyle(BeeStyle.muted) }
         case "monthly", "projects":
             let plans = db.budgets.filter { block.kind == "monthly" ? $0.kind == .monthly && $0.start.month == (filters.start ?? .today).month : $0.kind == .project && !$0.completed }
@@ -120,17 +125,17 @@ struct DashboardBlockView: View {
                 Text("Бюджет не задан").beeFont(.subheadline).foregroundStyle(BeeStyle.muted); Button("Создать бюджет") { model.sheet = SheetRoute(kind: .budget, budgetKind: block.kind == "monthly" ? .monthly : .project) }.buttonStyle(BeeRowStyle())
             }
             ForEach(plans.prefix(2)) { budget in BudgetSummary(budget: budget, filters: filters) }
-            if block.kind == "projects" { let report = standardReport(metric: .expense, grouping: .project, filters: filters, db: db); if let rows = try? Reports.rows(report, db: db) { ForEach(rows.prefix(3)) { row in Button { model.showOperations(row.operationIDs, title: row.title, filters: filters) } label: { HStack { Text(row.title); Spacer(); Text(BeeFormat.valuation(row.value, currency: currency)) } }.buttonStyle(BeeRowStyle()).beeFont(.caption) } } }
+            if block.kind == "projects" { let report = standardReport(metric: .expense, grouping: .project, filters: filters, db: db); if let rows = try? Reports.rows(report, db: db) { ForEach(rows.prefix(3)) { row in Button { model.showOperations(row.operationIDs, title: row.title, filters: filters, currency: currency) } label: { HStack { Text(row.title); Spacer(); Text(BeeFormat.valuation(row.value, currency: currency)) } }.buttonStyle(BeeRowStyle()).beeFont(.caption) } } }
         default:
             if var report = db.reports.first(where: { $0.id == block.reportID }) { let _ = report.filters = filters; if report.dataset == .balances { let _ = report.filters.categories = []; let _ = report.filters.projectID = nil; let _ = report.filters.participation = .all }; ReportDisplay(report: report) }
         }
     }
     private func flow(_ title: String, ops: [BudgetCore.Operation], db: Database, filters: Filters, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) { Text(title).beeFont(.subheadline).foregroundStyle(color); if let value = try? Reports.sum(ops, db: db, currency: db.settings.reportCurrency) { Button { model.showOperations(ops.map(\.id), title: title, filters: filters) } label: { Text(BeeFormat.money(value.known, currency: db.settings.reportCurrency)).beeFont(.system(size: 23, weight: .semibold)).monospacedDigit().fixedSize(horizontal: false, vertical: true) }.buttonStyle(BeeRowStyle()).accessibilityLabel("Открыть операции: " + title); if value.partial { PartialStatus(value: value) } }; Text("\(ops.count) операций").beeFont(.caption).foregroundStyle(BeeStyle.muted) }.frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 10) { Text(title).beeFont(.subheadline).foregroundStyle(color); if let value = try? Reports.sum(ops, db: db, currency: db.settings.baseCurrency) { Button { model.showOperations(ops.map(\.id), title: title, filters: filters, currency: db.settings.baseCurrency) } label: { Text(BeeFormat.money(value.known, currency: db.settings.baseCurrency)).beeFont(.system(size: 23, weight: .semibold)).monospacedDigit().fixedSize(horizontal: false, vertical: true) }.buttonStyle(BeeRowStyle()).accessibilityLabel("Открыть операции: " + title); if value.partial { PartialStatus(value: value) } }; Text("\(ops.count) операций").beeFont(.caption).foregroundStyle(BeeStyle.muted) }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-func standardReport(metric: Metric, grouping: Grouping, filters: Filters, db: Database) -> Report { var report = Report(name: metric.title); report.metric = metric; report.grouping = grouping; report.filters = filters; report.currency = db.settings.reportCurrency; return report }
+func standardReport(metric: Metric, grouping: Grouping, filters: Filters, db: Database) -> Report { var report = Report(name: metric.title); report.metric = metric; report.grouping = grouping; report.filters = filters; report.currency = db.settings.baseCurrency; return report }
 
 struct TrendChart: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared

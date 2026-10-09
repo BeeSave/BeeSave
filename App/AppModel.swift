@@ -20,9 +20,10 @@ struct SheetRoute: Identifiable {
 @MainActor final class AppModel: ObservableObject {
     #if DEBUG && UI_SMOKE
     @Published var previewAppearance: ColorScheme? = nil
+    @Published var previewReduceTransparency = false
     @Published var previewScenario = PreviewScenario.filled
     #endif
-    @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var section = SectionID.dashboard; @Published var sheet: SheetRoute?; @Published var historyAccount: UUID?; @Published var error: String?; @Published var backupError: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var startupError: String?
+    @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var section = SectionID.dashboard; @Published var sheet: SheetRoute?; @Published var historyAccount: UUID?; @Published var error: String?; @Published var backupError: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var drilldownCurrency: String?; @Published var startupError: String?
     @Published var noticeMessage: AppNotice?
     @Published var rateError: String?
     private var noticeTask: Task<Void, Never>?
@@ -132,7 +133,7 @@ struct SheetRoute: Identifiable {
         BudgetWindows.hideSensitiveWindows()
         rateError = nil
         cancelFinancialForecasts(); financialEvents = [:]; financialDebts = [:]; financialErrors = [:]; financialNotificationStatus = nil
-        rateTask?.cancel(); rateTask = nil; rateBusy = false; sheet = nil; historyAccount = nil; drilldown = nil; showGettingStarted = false; settingsTask = .general; error = nil; notice = nil; backupError = nil; db = nil; vault.close(); sessionHidden = true
+        rateTask?.cancel(); rateTask = nil; rateBusy = false; sheet = nil; historyAccount = nil; drilldown = nil; drilldownCurrency = nil; showGettingStarted = false; settingsTask = .general; error = nil; notice = nil; backupError = nil; db = nil; vault.close(); sessionHidden = true
     }
     func resumeSession() {
         guard sessionHidden else { return }; sessionHidden = false
@@ -224,17 +225,17 @@ struct SheetRoute: Identifiable {
     func perform(_ mutation: (inout Database) throws -> Void) { do { try commit(mutation) } catch { self.error = error.localizedDescription } }
     func newOperation(_ kind: OperationKind, account: UUID? = nil) { guard !updateFrozen, !updateVerificationPending else { return }; sheet = SheetRoute(kind: .operation, operationKind: kind, accountContext: account ?? historyAccount) }
     func openHistory(_ id: UUID) { historyAccount = id; section = .accounts }
-    func showOperations(_ ids: [UUID], title: String = "Операции показателя", filters: Filters = Filters()) { drilldownTitle = title; drilldownFilters = filters; drilldown = ids }
+    func showOperations(_ ids: [UUID], title: String = "Операции показателя", filters: Filters = Filters(), currency: String? = nil) { drilldownTitle = title; drilldownFilters = filters; drilldownCurrency = currency; drilldown = ids }
     private var dashboardRateRefreshPending = false
     func setDashboardCurrencies(_ codes: [String]) {
         do {
-            try DashboardCurrencySelection.validate(codes)
-            try commit { $0.settings.dashboardCurrencies = codes }
+            try DashboardCurrencySelection.validate(codes, baseCurrency: db?.settings.baseCurrency)
+            try commit { $0.settings.dashboardCurrencies = codes; $0.settings.dashboardCurrenciesVersion = 2 }
             refreshMissingDashboardRates()
         } catch { self.error = error.localizedDescription }
     }
     func setBaseCurrency(_ code: String) {
-        do { try commit { _ = try Currency.get(code); $0.settings.baseCurrency = code }; refreshMissingDashboardRates() }
+        do { try commit { _ = try Currency.get(code); $0.settings.normalizeDashboardCurrencies(); $0.settings.baseCurrency = code; $0.settings.normalizeDashboardCurrencies() }; refreshMissingDashboardRates() }
         catch { self.error = error.localizedDescription }
     }
     private func refreshMissingDashboardRates() {

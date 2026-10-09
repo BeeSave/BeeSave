@@ -81,12 +81,19 @@ private struct Transport: AppUpdateTransport {
         check(BudgetWindows.preferred(ordered: [settingsWindow, budgetWindow], key: settingsWindow) == nil,
               "notification does not select unrelated or detached windows")
         let model = AppModel()
-        model.setDashboardCurrencies(["RUB", "USD", "GBP", "EUR", "JPY"])
+        model.setDashboardCurrencies(["USD", "GBP", "EUR", "JPY", "CHF"])
         check(model.db?.settings.selectedDashboardCurrencies.count == 5, "dashboard selection is saved through the real encrypted model")
         let currencyBytes = try Data(contentsOf: model.vault.url)
-        model.setDashboardCurrencies(["RUB", "USD", "GBP", "EUR", "JPY", "CHF"])
+        model.setDashboardCurrencies(["USD", "GBP", "EUR", "JPY", "CHF", "AUD"])
         check(try Data(contentsOf: model.vault.url) == currencyBytes && model.error != nil, "sixth currency is rejected without writing the vault")
         model.error = nil
+        model.setDashboardCurrencies(["RUB"])
+        check(try Data(contentsOf: model.vault.url) == currencyBytes && model.error != nil, "base currency is rejected without writing the vault")
+        model.error = nil
+        model.setBaseCurrency("USD")
+        check(model.db?.settings.selectedDashboardCurrencies == ["GBP", "EUR", "JPY", "CHF"], "changing base removes its selected rate and preserves other choices")
+        model.setBaseCurrency("RUB")
+        check(model.db?.settings.selectedDashboardCurrencies == ["GBP", "EUR", "JPY", "CHF"], "removed base rate is not silently restored")
         model.setDashboardCurrencies([])
         check(model.db?.settings.selectedDashboardCurrencies == [], "explicit empty selection remains hidden")
         let emptyCurrencies = model.db
@@ -97,6 +104,23 @@ private struct Transport: AppUpdateTransport {
         model.setBaseCurrency("USD")
         check(model.db?.settings.baseCurrency == "USD" && model.db?.accounts.last?.currency == "USD", "base currency changes without changing account currencies")
         model.loadPreview(.filled)
+        try model.commit { $0.settings.reportCurrency = "GBP" }
+        let homeReport = standardReport(metric: .expense, grouping: .category, filters: model.db!.settings.dashboardFilters, db: model.db!)
+        let homeTotal = try Reports.total(Reports.rows(homeReport, db: model.db!))
+        check(homeReport.currency == "RUB" && homeTotal.known == 128_000, "Home summary uses base currency despite a different legacy report currency")
+        model.showOperations(model.db!.operations.filter { $0.kind == .expense }.map(\.id), title: "Home expenses", currency: model.db!.settings.baseCurrency)
+        check(model.drilldownCurrency == "RUB", "Home detail carries its own valuation currency")
+        model.drilldown = nil
+        var savedEUR = Report(name: "Fictional EUR report"); savedEUR.currency = "EUR"
+        try model.commit { db in db.reports.append(savedEUR); db.budgets[0].currency = "GBP" }
+        let retainedOperations = model.db!.operations
+        let retainedGBPPlan = model.db!.budgets[0]
+        model.setBaseCurrency("USD")
+        check(standardReport(metric: .expense, grouping: .category, filters: model.db!.settings.dashboardFilters, db: model.db!).currency == "USD", "Home summary follows the new base currency")
+        check(model.db!.reports.last == savedEUR && model.db!.budgets[0] == retainedGBPPlan && model.db!.operations == retainedOperations,
+              "base change preserves saved EUR report, GBP plan and historical operation snapshots")
+        model.setBaseCurrency("RUB")
+        await model.waitForDailyBackup()
         let rateCache = model.db?.rates
         let rateCheck = model.db?.settings.lastRateCheck
         model.notice = nil

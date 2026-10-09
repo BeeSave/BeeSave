@@ -40,7 +40,7 @@ struct HomeView: View {
         }.frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .sheet(isPresented: Binding(get: { model.drilldown != nil }, set: { if !$0 { model.drilldown = nil } })) {
-            VStack(spacing: 0) { HStack { Text(model.drilldownTitle).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { model.drilldown = nil }.keyboardShortcut(.cancelAction) }.padding(22); OperationsView(ids: model.drilldown, initialFilters: model.drilldownFilters) }.beeSheet(width: 960, height: 640).beeWindow()
+            VStack(spacing: 0) { HStack { Text(model.drilldownTitle).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { model.drilldown = nil }.keyboardShortcut(.cancelAction) }.padding(22); OperationsView(ids: model.drilldown, initialFilters: model.drilldownFilters, valuationCurrency: model.drilldownCurrency) }.beeSheet(width: 960, height: 640).beeWindow()
         }
     }
 }
@@ -125,16 +125,18 @@ struct OperationsView: View {
     var kind: OperationKind?
     var accountID: UUID?
     var ids: [UUID]?
+    var valuationCurrency: String?
     var initialPeriod: Filters
     @State private var filters: Filters
     @State private var selected: UUID?
     @State private var editor: SheetRoute?
     @State private var sortOrder = [KeyPathComparator(\OperationTableEntry.date, order: .reverse)]
-    init(kind: OperationKind? = nil, accountID: UUID? = nil, ids: [UUID]? = nil, initialFilters: Filters = Filters()) { self.kind = kind; self.accountID = accountID; self.ids = ids; self.initialPeriod = initialFilters; _filters = State(initialValue: initialFilters) }
+    init(kind: OperationKind? = nil, accountID: UUID? = nil, ids: [UUID]? = nil, initialFilters: Filters = Filters(), valuationCurrency: String? = nil) { self.valuationCurrency = valuationCurrency; self.kind = kind; self.accountID = accountID; self.ids = ids; self.initialPeriod = initialFilters; _filters = State(initialValue: initialFilters) }
     var operations: [BudgetCore.Operation] { guard let db = model.db else { return [] }; var candidate = filters; if let accountID { candidate.accounts = [accountID] }; var rows = Reports.selected(db, filters: candidate, kinds: kind.map { [$0] }, sorted: false); if let ids { let allowed = Set(ids); rows = rows.filter { allowed.contains($0.id) } }; return rows }
     private var tableRows: [OperationTableEntry] { guard let db = model.db else { return [] }; let accounts = Dictionary(uniqueKeysWithValues: db.accounts.map { ($0.id, $0) }); return operations.map { OperationTableEntry(operation: $0, source: accounts[$0.accountID], context: accountID.flatMap { accounts[$0] }) }.sorted(using: sortOrder) }
     private var exportFilters: Filters { var value = filters; if let accountID { value.accounts = [accountID] }; return value }
     var body: some View { if let db = model.db {
+        let reportCurrency = valuationCurrency ?? db.settings.reportCurrency
         VStack(alignment: .leading, spacing: 14) {
             SectionHeading(title: ids != nil ? "Детализация" : kind == .expense ? "Расходы" : kind == .income ? "Доходы" : "История") {
                 Button("Экспорт…") { model.exportCSV(selection: operations, filters: exportFilters) }
@@ -157,7 +159,7 @@ struct OperationsView: View {
                             if let to = operation.toAccountID, let received = operation.toAmount, let destination = db.accounts.first(where: { $0.id == to }) { Text("→ \(destination.name): " + BeeFormat.money(received, currency: destination.currency)).beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                         }
                     }.width(min: 155 * appearanceStore.preferences.scale, ideal: 190 * appearanceStore.preferences.scale)
-                    TableColumn("Категория / проект") { entry in let operation = entry.operation; VStack(alignment: .leading) { Text(operation.kind.isFlow ? db.categoryPath(operation.categoryID) : "—"); if let project = db.projects.first(where: { $0.id == operation.projectID }) { Text(project.name).beeFont(.caption).foregroundStyle(BeeStyle.muted) }; if operation.kind.isFlow, let account = db.accounts.first(where: { $0.id == operation.accountID }), account.currency != db.settings.reportCurrency, (try? Reports.rate(from: account.currency, to: db.settings.reportCurrency, rates: operation.fx, on: operation.date)) == nil { Text("Без курса \(db.settings.reportCurrency)").beeFont(.caption).foregroundStyle(BeeStyle.warning) } } }.width(min: 180 * appearanceStore.preferences.scale, ideal: 230 * appearanceStore.preferences.scale)
+                    TableColumn("Категория / проект") { entry in let operation = entry.operation; VStack(alignment: .leading) { Text(operation.kind.isFlow ? db.categoryPath(operation.categoryID) : "—"); if let project = db.projects.first(where: { $0.id == operation.projectID }) { Text(project.name).beeFont(.caption).foregroundStyle(BeeStyle.muted) }; if operation.kind.isFlow, let account = db.accounts.first(where: { $0.id == operation.accountID }), account.currency != reportCurrency, (try? Reports.rate(from: account.currency, to: reportCurrency, rates: operation.fx, on: operation.date)) == nil { Text("Без курса \(reportCurrency)").beeFont(.caption).foregroundStyle(BeeStyle.warning) } } }.width(min: 180 * appearanceStore.preferences.scale, ideal: 230 * appearanceStore.preferences.scale)
                     TableColumn("Комментарий", value: \.comment) { Text($0.comment).lineLimit(2) }.width(min: 140 * appearanceStore.preferences.scale, ideal: 220 * appearanceStore.preferences.scale)
                 }.scrollContentBackground(.hidden).foregroundStyle(BeeStyle.text)
                     .contextMenu(forSelectionType: UUID.self) { selection in if let id = selection.first { Button("Изменить") { edit(id) }; ForEach((db.financeData.scheduledPayments ?? []).filter { $0.allocations.contains { $0.operationID == id } }) { p in Button("План: " + p.title) { openScheduled(p.id) } }; Button("Удалить", role: .destructive) { remove(id) } } } primaryAction: { selection in if let id = selection.first { edit(id) } }

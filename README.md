@@ -2,7 +2,7 @@
 
 Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-BeeSave 1.7 shows each account balance in its own currency alongside its value in your base currency. The Home page also shows exchange rates; choose up to five currencies in Settings → Currencies and Rates.
+BeeSave 1.8 shows compact Liquid Glass exchange rates beside the Home filters. USD and GBP are shown by default, excluding your base currency; choose up to five currencies in Settings → Currencies and Rates. Standard Home summaries use your base currency, and account balances also show their original currency.
 
 BeeSave brings your accounts, income, expenses, transfers, budgets, and reports together in one place. It supports multiple currencies, CSV import and export, encrypted storage, and full backups.
 
