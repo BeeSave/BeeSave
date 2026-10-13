@@ -91,7 +91,7 @@ final class ScheduledPaymentTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("scheduled-migration-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
         let key = try VaultCrypto.random(), store = VaultStore(url: root.appendingPathComponent("vault")); try store.initialize(db: old, dataKey: key, bootstrap: Bootstrap(databaseID: old.id, password: nil, recovery: Data())); store.close()
         let raw = try Data(contentsOf: store.url); store.beforeWrite = { throw BudgetError.storage("fixture failure") }; XCTAssertThrowsError(try store.unlock(key: key)); XCTAssertEqual(try Data(contentsOf: store.url), raw)
-        store.beforeWrite = nil; try store.unlock(key: key); XCTAssertEqual(store.db?.version, 3)
+        store.beforeWrite = nil; try store.unlock(key: key); XCTAssertEqual(store.db?.version, 4)
         let originals = try FileManager.default.contentsOfDirectory(at: root.appendingPathComponent("Backups.noindex"), includingPropertiesForKeys: nil); XCTAssertFalse(originals.isEmpty)
         XCTAssertEqual(try VaultFile.read(Data(contentsOf: originals[0])).decrypt(key: key), old)
     }

@@ -14,6 +14,7 @@ struct HomeView: View {
                         Text(item.rawValue).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     }.beeFont(.body).padding(.vertical, 5)
             }
+                .clipped()
                 .navigationSplitViewColumnWidth(min: 210 + 140 * (appearance.scale - 1), ideal: 240 + 120 * (appearance.scale - 1), max: 360)
                 .safeAreaInset(edge: .bottom) {
                     HStack {
@@ -29,6 +30,8 @@ struct HomeView: View {
                 switch model.section {
                 case .dashboard: DashboardView()
                 case .accounts: AccountsView()
+                case .planning: PlanningView()
+                case .projects: ProjectsView()
                 case .expenses: ExpensesView()
                 case .incomes: OperationsView(kind: .income)
                 case .budgets: BudgetsView()
@@ -38,7 +41,8 @@ struct HomeView: View {
             }.frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity).beeNavigationContent().navigationTitle(model.section.rawValue).environment(\.beeToolbarActions, true)
 
         }.frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .toolbarBackground(BeeStyle.background, for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
         .sheet(isPresented: Binding(get: { model.drilldown != nil }, set: { if !$0 { model.drilldown = nil } })) {
             VStack(spacing: 0) { HStack { Text(model.drilldownTitle).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { model.drilldown = nil }.keyboardShortcut(.cancelAction) }.padding(22); OperationsView(ids: model.drilldown, initialFilters: model.drilldownFilters, valuationCurrency: model.drilldownCurrency) }.beeSheet(width: 960, height: 640).beeWindow()
         }
@@ -50,6 +54,7 @@ struct AccountsView: View {
     @EnvironmentObject var model: AppModel
     @State private var archived = false
     @State private var financialKind: AccountKind?
+    @State private var accountSearch = ""
     var body: some View { if let db = model.db {
         if let id = model.historyAccount, let account = db.accounts.first(where: { $0.id == id }) {
             if account.kind == .ordinary {
@@ -74,7 +79,17 @@ struct AccountsView: View {
             BeeSegments(title: "Список счетов", labels: ["Активные", "Архив"], selection: Binding(get: { archived ? 1 : 0 }, set: { archived = $0 == 1 }))
                 .frame(maxWidth: 560 * pow(appearanceStore.preferences.scale, 0.5)).frame(maxWidth: .infinity)
             BeePicker("Тип счёта", selection: $financialKind) { Text("Все типы").tag(nil as AccountKind?); ForEach(AccountKind.allCases, id: \.self) { Text($0.title).tag(Optional($0)) } }.frame(maxWidth: 300 * appearanceStore.preferences.scale)
-            let visible = db.accounts.filter { $0.archived == archived && (financialKind == nil || $0.kind == financialKind) }
+            VStack(alignment:.leading,spacing:12) {
+                TextField("Найти счёт, банк или валюту",text:$accountSearch).textFieldStyle(BeeTextFieldStyle())
+                WrappingLayout(spacing:12) { BeeSegments(title:"Вид счетов",labels:["Список","Карточки"],selection:Binding(get:{ db.planningData.accountCards ? 1 : 0 },set:{ model.changePlanning(.accountView($0 == 1,db.planningData.accountSort)) })).frame(width:240 * appearanceStore.preferences.scale)
+                BeePicker("Сортировка",selection:Binding(get:{ db.planningData.accountSort },set:{ model.changePlanning(.accountView(db.planningData.accountCards,$0)) })) { Text("Название").tag("name"); Text("Валюта").tag("currency"); Text("Остаток").tag("balance") }.labelsHidden().frame(width:180 * appearanceStore.preferences.scale) }
+            }
+            let visible = db.accounts.filter { $0.archived == archived && (financialKind == nil || $0.kind == financialKind) && (accountSearch.isEmpty || ($0.name + " " + $0.currency + " " + (db.financialBankName($0.bankID) ?? $0.bankID ?? "")).localizedCaseInsensitiveContains(accountSearch)) }.sorted { lhs,rhs in
+                if db.planningData.accountSort == "currency",lhs.currency != rhs.currency { return lhs.currency < rhs.currency }
+                if db.planningData.accountSort == "balance" && lhs.currency != rhs.currency { return lhs.currency < rhs.currency }
+                if db.planningData.accountSort == "balance" { let a = (try? db.balance(lhs.id)) ?? 0,b = (try? db.balance(rhs.id)) ?? 0; if a != b { return a > b } }
+                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            }
             if visible.isEmpty {
                 EmptyState(title: archived ? "В архиве пока нет счетов" : db.accounts.isEmpty ? "Добавьте первый счёт" : "Нет активных счетов",
                            detail: archived ? "Архивные счета сохраняют свою историю. Их можно вернуть в активные." : db.accounts.isEmpty ? "Карта, накопления или наличные — валюта и начальный остаток." : "Выберите другой тип счёта или добавьте новый.", icon: archived ? "archivebox" : "wallet.bifold").beeCard()
@@ -83,7 +98,9 @@ struct AccountsView: View {
                 let accounts = visible.filter { section.includes($0.kind) }
                 if !accounts.isEmpty {
                     Text(section.rawValue).beeFont(.headline).foregroundStyle(BeeStyle.backgroundMuted)
-                    LazyVStack(spacing: 0) { ForEach(accounts) { account in FinancialAccountRow(account: account, db: db); if account.id != accounts.last?.id { Divider() } } }.beeCard()
+                    if db.planningData.accountCards {
+                        LazyVGrid(columns:[GridItem(.adaptive(minimum:300 * appearanceStore.preferences.scale,maximum:500 * appearanceStore.preferences.scale))],spacing:18) { ForEach(accounts) { account in AccountPlanningCard(account:account,db:db) } }
+                    } else { LazyVStack(spacing: 0) { ForEach(accounts) { account in FinancialAccountRow(account: account, db: db); if account.id != accounts.last?.id { Divider() } } }.beeCard() }
                 }
             }
         }.padding(26) } }

@@ -118,7 +118,7 @@ public struct AppearancePalette: Codable, Equatable, Sendable {
 }
 
 public struct AppearancePreferences: Codable, Equatable, Sendable {
-    public static let scales = [100, 110, 125, 140, 160]
+    public static let scales = [100, 110, 125, 140, 160, 180, 200]
     public var theme: AppearanceTheme = .beeSave
     public var textPercent: Int = 100
     public var custom = AppearancePalette.preset(.midnight)

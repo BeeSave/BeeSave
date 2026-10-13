@@ -5,22 +5,32 @@ import BudgetCore
 import BudgetPresentation
 
 enum SectionID: String, CaseIterable, Identifiable {
-    case dashboard = "Главная", accounts = "Мои счета", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", references = "Справочники", financialCalendar = "Календарь"
+    case dashboard = "Главная", accounts = "Мои счета", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", planning = "Планирование", projects = "Проекты", references = "Справочники", financialCalendar = "Календарь"
     var id: String { rawValue }
-    var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .references: "books.vertical"; case .financialCalendar: "calendar" } }
+    var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .planning: "chart.xyaxis.line"; case .projects: "flag"; case .references: "books.vertical"; case .financialCalendar: "calendar" } }
 }
 enum SettingsTask: String, CaseIterable, Identifiable {
     case general = "Общие", appearance = "Внешний вид", access = "Вход и защита", rates = "Валюты и курсы", backups = "Резервные копии", transfer = "Импорт и экспорт", reminders = "Напоминания"
     var id: String { rawValue }
 }
 struct SheetRoute: Identifiable {
-    enum Kind { case account, bank, financialPayment, scheduledPayment, scheduledDetail, operation, reconciliation, category, project, budget, report, reportView, layout, importCSV, restore }
+    enum Kind { case planFlow, savingsGoal, taxProfile, eventSettings, planFact, account, bank, financialPayment, scheduledPayment, scheduledDetail, operation, reconciliation, category, project, budget, report, reportView, layout, importCSV, restore }
     var id = UUID(); var kind: Kind; var entityID: UUID?; var operationKind = OperationKind.expense; var accountContext: UUID?; var budgetKind = BudgetKind.monthly
 }
 @MainActor final class AppModel: ObservableObject {
+    var planningSession = PlanningToolSession()
+    var planningTask: Task<Void,Never>?
+    var planningRequest = UUID()
+    @Published var planningProjection: PlanningProjection?
+    @Published var planningAttention: [PlanningAttentionEvent] = []
+    @Published var planningRows: [PlannedOccurrence] = []
+    @Published var planningBusy = false
+    @Published var planningError: String?
+    @Published var planningProjectID: UUID?
     #if DEBUG && UI_SMOKE
     @Published var previewAppearance: ColorScheme? = nil
     @Published var previewReduceTransparency = false
+    @Published var previewReduceMotion = false
     @Published var previewScenario = PreviewScenario.filled
     #endif
     @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var section = SectionID.dashboard; @Published var sheet: SheetRoute?; @Published var historyAccount: UUID?; @Published var error: String?; @Published var backupError: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var drilldownCurrency: String?; @Published var startupError: String?
@@ -129,6 +139,7 @@ struct SheetRoute: Identifiable {
         } }
     }
     func lock() {
+        planningSession.revoke(); cancelPlanning(); planningProjectID = nil
         dailyBackupID = UUID(); dailyBackupTask?.cancel(); dailyBackupTask = nil; dailyBackupBusy = false
         BudgetWindows.hideSensitiveWindows()
         rateError = nil
@@ -138,7 +149,7 @@ struct SheetRoute: Identifiable {
     func resumeSession() {
         guard sessionHidden else { return }; sessionHidden = false
     }
-    func didUnlock() { dailyBackupID = UUID(); dailyBackupTask?.cancel(); dailyBackupTask = nil; dailyBackupBusy = false; BudgetWindows.sessionUnlocked(); error = nil; db = vault.db; bootstrap = vault.bootstrap; startupError = nil; failures = 0; retryAt = nil; sessionHidden = false; activity(); confirmUpdatedBudget?(); refreshRates(automatic: true); refreshFinancialForecasts() }
+    func didUnlock() { planningSession.revoke(); planningSession = PlanningToolSession(); dailyBackupID = UUID(); dailyBackupTask?.cancel(); dailyBackupTask = nil; dailyBackupBusy = false; BudgetWindows.sessionUnlocked(); error = nil; db = vault.db; bootstrap = vault.bootstrap; startupError = nil; failures = 0; retryAt = nil; sessionHidden = false; activity(); confirmUpdatedBudget?(); refreshRates(automatic: true); refreshFinancialForecasts() }
     func unlock(password: String) {
         guard !busy else { return }; guard retryAt == nil || Date() >= retryAt! else { error = "Подождите 30 секунд после пяти ошибочных попыток."; return }
         busy = true; defer { busy = false }
@@ -353,9 +364,9 @@ extension AppModel {
             if FileManager.default.fileExists(atPath: root.path) { try FileManager.default.removeItem(at: root) }
             try vault.acquire()
             if scenario != .new {
-                let sample = try PreviewFixtures.database(scenario); let key = try VaultCrypto.random(); let recovery = try VaultCrypto.random()
+                let sample = try (ProcessInfo.processInfo.arguments.contains("--planning-qa") ? PlanningQAFixture.database() : PreviewFixtures.database(scenario)); let key = try VaultCrypto.random(); let recovery = try VaultCrypto.random()
                 let b = Bootstrap(databaseID: sample.id, password: try VaultCrypto.wrapPassword(key, password: "UI fixture password only"), recovery: try VaultCrypto.seal(key, key: recovery, context: VaultCrypto.recoveryContext))
-                try vault.initialize(db: sample, dataKey: key, bootstrap: b); BudgetWindows.sessionUnlocked(); db = vault.db; bootstrap = b
+                try vault.initialize(db: sample, dataKey: key, bootstrap: b); planningSession = PlanningToolSession(); BudgetWindows.sessionUnlocked(); db = vault.db; bootstrap = b
             }
             notice = "Тестовое окно · вымышленные данные · отдельная временная база"; refreshFinancialForecasts()
         } catch { startupError = error.localizedDescription }

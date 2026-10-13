@@ -43,8 +43,10 @@ private struct Transport: AppUpdateTransport {
         appearance.update { $0.textPercent = 160; $0.theme = .midnight }
         check(AppearanceStore(defaults: appearanceDefaults).preferences == appearance.preferences,
               "installation appearance survives a new store without opening a budget")
-        let retained = appearance.preferences
         appearance.update { $0.textPercent = 200 }
+        check(AppearanceStore(defaults:appearanceDefaults).preferences.textPercent == 200,"approved 200 percent scale persists")
+        let retained = appearance.preferences
+        appearance.update { $0.textPercent = 175 }
         check(appearance.preferences == retained, "invalid font scale cannot be persisted")
         appearance.update { $0.custom.text = $0.custom.surface; $0.theme = .custom }
         check(appearance.preferences == retained, "unreadable custom theme cannot be persisted")
@@ -81,6 +83,23 @@ private struct Transport: AppUpdateTransport {
         check(BudgetWindows.preferred(ordered: [settingsWindow, budgetWindow], key: settingsWindow) == nil,
               "notification does not select unrelated or detached windows")
         let model = AppModel()
+        let fixtureIdentity = model.db!.id
+        let fixtureRevision = model.db!.revision ?? 0
+        var living = PlanFlow(title: "Fictional planning integration", purpose: .living, amount: 10000, currency: "RUB", start: .today)
+        living.frequency = .monthly
+        try model.savePlanning(.flow(living))
+        check(model.db!.planningData.flows.contains(where: { $0.id == living.id }), "planning writes through the actual encrypted app model")
+        let storedPlanning = try model.vault.withKey { try VaultFile.read(Data(contentsOf: model.vault.url)).decrypt(key: $0) }
+        check(storedPlanning == model.db && (storedPlanning.revision ?? 0) > fixtureRevision, "planning data and revision are persisted together")
+        let beforeStalePlanning = try Data(contentsOf:model.vault.url)
+        do { try model.savePlanning(.reserve(999,"RUB"),expectedRevision:fixtureRevision); check(false,"stale planning form must be rejected") } catch { check(true,"stale planning form is rejected") }
+        check(try Data(contentsOf:model.vault.url) == beforeStalePlanning,"stale planning form preserves the encrypted database")
+        let oldSession = model.planningSession
+        let oldAccess = PlanningAccess(actorID:fixtureIdentity,fullPlan:true,canApply:false,sessionID:oldSession.id)
+        model.lock()
+        do { try oldSession.check(oldAccess); check(false,"old planning session must be revoked") } catch { check(true,"locking revokes planning tools") }
+        check(model.planningProjection == nil && model.planningRows.isEmpty && model.planningAttention.isEmpty,"locking clears financial planning projections")
+        model.loadPreview(.filled)
         model.setDashboardCurrencies(["USD", "GBP", "EUR", "JPY", "CHF"])
         check(model.db?.settings.selectedDashboardCurrencies.count == 5, "dashboard selection is saved through the real encrypted model")
         let currencyBytes = try Data(contentsOf: model.vault.url)

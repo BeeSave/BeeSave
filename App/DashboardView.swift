@@ -39,8 +39,8 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 22) {
             SectionHeading(title: model.showGettingStarted ? "Начнём учёт" : "Главная") {
                 if !db.accounts.isEmpty && !model.showGettingStarted {
-                Button("Добавить расход", systemImage: "plus") { model.newOperation(.expense) }.buttonStyle(BeePrimaryStyle())
-                Menu { Button("Добавить доход") { model.newOperation(.income) }; Button("Перевести между счетами") { model.newOperation(.transfer) } } label: { Image(systemName: "chevron.down") }.menuIndicator(.hidden)
+                Button("Планировать бюджет", systemImage: "chart.xyaxis.line") { model.section = .planning }.buttonStyle(BeePrimaryStyle())
+                Menu { Button("Добавить расход") { model.newOperation(.expense) }; Button("Добавить доход") { model.newOperation(.income) }; Button("Перевести между счетами") { model.newOperation(.transfer) } } label: { Image(systemName: "chevron.down") }.menuIndicator(.hidden)
                 Menu("Отчёты") { ForEach(db.reports) { report in Button(report.name) { model.sheet = SheetRoute(kind: .reportView, entityID: report.id) } }; Divider(); Button("Создать отчёт…") { model.sheet = SheetRoute(kind: .report) } }
                 Button("Настроить", systemImage: "rectangle.3.group") { model.sheet = SheetRoute(kind: .layout) }
                 }
@@ -59,16 +59,18 @@ struct DashboardView: View {
                 }
             } else { DashboardExchangeRates() }
             FinancialDashboardSummary()
-            ScheduledDashboardSummary()
+            UpcomingPaymentsCard()
+            UpcomingAttentionCard()
+            PlanningLiquiditySummary()
             if db.accounts.isEmpty || model.showGettingStarted {
                 VStack(alignment: .leading, spacing: 18) {
                     Image(systemName: "wallet.bifold").beeFont(.system(size: 32)).foregroundStyle(BeeStyle.expense)
                     Text("Добавьте первый счёт").beeFont(.title.bold()); Text("Начните с карты или наличных: задайте валюту и текущий остаток.").foregroundStyle(BeeStyle.muted)
                     HStack { Button("Создать счёт", systemImage: "plus") { model.showGettingStarted = false; model.sheet = SheetRoute(kind: .account) }.buttonStyle(BeePrimaryStyle()); Button("Импортировать CSV") { model.showGettingStarted = false; model.sheet = SheetRoute(kind: .importCSV) }; if model.showGettingStarted { Button("Позже") { model.showGettingStarted = false } } }
                 }.frame(maxWidth: .infinity, alignment: .leading).beeCard(padding: 28)
-            } else if !db.operations.contains(where: { $0.kind.isFlow }) {
+            } else if !db.operations.contains(where: { $0.kind.isFlow }) && db.planningData.flows.isEmpty && db.projects.isEmpty {
                 DashboardBlockView(block: db.dashboard.first(where: { $0.kind == "balances" }) ?? DashboardBlock(kind: "balances"))
-                VStack(alignment: .leading, spacing: 16) { Text("Добавьте первый расход или доход").beeFont(.title2.bold()); Text("Остатки уже доступны. Сводка потоков появится после первой операции.").foregroundStyle(BeeStyle.muted); HStack { Button("Добавить расход") { model.newOperation(.expense) }.buttonStyle(BeePrimaryStyle()); Button("Добавить доход") { model.newOperation(.income) } } }.frame(maxWidth: .infinity, alignment: .leading).beeCard()
+                VStack(alignment: .leading, spacing: 16) { Text("Спланируйте регулярный бюджет").beeFont(.title2.bold()); Text("Укажите доход, стоимость жизни и обязательства. Подробный список покупок необязателен.").foregroundStyle(BeeStyle.muted); HStack { Button("Начать планирование") { model.section = .planning }.buttonStyle(BeePrimaryStyle()); Button("Добавить доход") { model.newOperation(.income) } } }.frame(maxWidth: .infinity, alignment: .leading).beeCard()
             } else {
                 Grid(horizontalSpacing: 18, verticalSpacing: 18) {
                     ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in GridRow(alignment: .top) { ForEach(row) { block in DashboardBlockView(block: block).frame(maxWidth: .infinity, alignment: .topLeading).gridCellColumns(6 / row.count) } } }
@@ -111,7 +113,7 @@ struct DashboardBlockView: View {
             }
             Divider()
             if let net = try? Reports.sum(operations, db: db, currency: currency, net: true) { HStack { Text("Разница").beeFont(.subheadline); Spacer(); PartialValue(value: net, currency: currency) }; Text("Доходы минус расходы · переводы исключены").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
-        case "trend": TrendChart(filters: filters, currency: currency)
+        case "trend": PlanningTrendChart(embedded:true)
         case "categories", "outside":
             var selected = filters; let _ = selected.participation = block.kind == "outside" ? .outside : selected.participation
             let report = standardReport(metric: .expense, grouping: .category, filters: selected, db: db)

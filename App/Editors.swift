@@ -13,6 +13,7 @@ struct AccountEditor: View {
     @State private var opened = Day.today.rawValue
     @State private var balance = "0"
     @State private var archived = false
+    @State private var businessProjectID: UUID?
     @State private var kind = AccountKind.ordinary
     @State private var bankID: String?
     @State private var contract: FinancialContract?
@@ -20,13 +21,14 @@ struct AccountEditor: View {
     @State private var loaded = false
     @State private var original = ""
     @FocusState private var focused: Bool
-    private var value: String { [name, currency, opened, balance, String(archived), kind.rawValue, bankID ?? "", contract.flatMap { try? JSONEncoder().encode($0) }.map { String(decoding: $0, as: UTF8.self) } ?? ""].joined(separator: "|") }
+    private var value: String { [name, currency, opened, balance, String(archived), kind.rawValue, businessProjectID?.uuidString ?? "", bankID ?? "", contract.flatMap { try? JSONEncoder().encode($0) }.map { String(decoding: $0, as: UTF8.self) } ?? ""].joined(separator: "|") }
     var body: some View {
         EditorFrame(title: id == nil ? "Новый счёт" : "Изменить счёт", isDirty: loaded && value != original, height: kind == .ordinary ? 580 : 740, save: save) {
             FormField(title: "Название") { TextField("Название счёта", text: $name).textFieldStyle(BeeTextFieldStyle()).focused($focused) }
             FinanceChoice(title: "Тип счёта", value: $kind, titleOf: { $0.title }).disabled(model.db?.contract(for: accountID) != nil)
             CurrencyPicker(title: "Валюта счёта", selection: $currency).disabled(id != nil && model.db?.operations.contains { $0.accountID == id || $0.toAccountID == id } == true)
             BankPicker(bankID: $bankID)
+            if let db = model.db { BeePicker("Счёт компании / проекта",selection:$businessProjectID) { Text("Личный счёт").tag(nil as UUID?); ForEach(db.projects.filter { $0.details?.type == .business }) { Text($0.name).tag(Optional($0.id)) } }; Text("Деньги компании отделены от личной ликвидности.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
             if id == nil { FormField(title: "Начальный остаток · \(currency)", hint: kind.isDebt ? "Задолженность укажите со знаком минус. Лимит задаётся отдельно и не увеличивает остаток." : "Начальный остаток не считается доходом.") { TextField("0", text: $balance).textFieldStyle(BeeTextFieldStyle()) } }
             DayField(title: "Дата открытия учёта", value: $opened)
             if id != nil { Toggle("Счёт в архиве", isOn: $archived).toggleStyle(.checkbox) }
@@ -38,7 +40,7 @@ struct AccountEditor: View {
     }
     private func load() {
         guard !loaded else { return }
-        if let account = model.db?.accounts.first(where: { $0.id == id }) { accountID = account.id; name = account.name; currency = account.currency; opened = account.openedOn.rawValue; archived = account.archived; kind = account.kind; bankID = account.bankID; contract = model.db?.contract(for: account.id) }
+        if let account = model.db?.accounts.first(where: { $0.id == id }) { accountID = account.id; name = account.name; currency = account.currency; opened = account.openedOn.rawValue; archived = account.archived; kind = account.kind; businessProjectID = account.businessProjectID; bankID = account.bankID; contract = model.db?.contract(for: account.id) }
         else { currency = model.db?.settings.baseCurrency ?? "RUB" }
         original = value; loaded = true; focused = true
     }
@@ -46,7 +48,7 @@ struct AccountEditor: View {
         guard fieldErrors.isEmpty else { throw BudgetError.invalid(fieldErrors.values.sorted().joined(separator: "\n")) }
         guard let db = model.db else { throw BudgetError.locked }
         var account = db.accounts.first { $0.id == id } ?? Account(name: name, currency: currency)
-        account.id = accountID; account.name = name; account.currency = currency; account.openedOn = try Day(opened); account.archived = archived; account.bankID = bankID
+        account.businessProjectID = businessProjectID; account.id = accountID; account.name = name; account.currency = currency; account.openedOn = try Day(opened); account.archived = archived; account.bankID = bankID
         let initial = id == nil ? try Money.parse(balance, currency: currency) : nil
         var savedContract = contract
         if id == nil, initial != nil { savedContract?.originalPrincipal = initial! < 0 ? try FinanceMath.positiveMagnitude(initial!) : initial! }
@@ -135,6 +137,10 @@ struct OperationEditor: View {
                         }
                         FormField(title: "Комментарий") { TextField("Необязательно", text: $comment, axis: .vertical).textFieldStyle(BeeTextFieldStyle()).lineLimit(2...4).focused($focus, equals: "comment") }
                     }.padding(.top, 12)
+                }
+                if let source = model.db?.operations.first(where:{ $0.id == id })?.reconciliation {
+                    let currency = source.currency ?? account?.currency ?? "RUB"
+                    VStack(alignment:.leading,spacing:6) { Text("Источник: сверка остатка").beeFont(.headline); Text("\(source.date) · учётный \(BeeFormat.money(source.balance,currency:currency)) → наблюдаемый \(BeeFormat.money(source.observed,currency:currency))").beeFont(.caption); Text(source.reason).beeFont(.caption); Text("Историческое наблюдение: изменение операции не устанавливает прежний целевой остаток.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                 }
                 if showRates { rateFields }
                 if let account { Text("Текущий остаток: " + BeeFormat.money((try? model.db?.balance(account.id)) ?? 0, currency: account.currency)).beeFont(.caption).foregroundStyle(BeeStyle.muted) }
@@ -230,27 +236,68 @@ struct OperationEditor: View {
 }
 
 struct ReconcileEditor: View {
-    @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var accountID: UUID?
     @State private var selected: UUID?
     @State private var actual = ""
     @State private var reason = ""
-    @State private var original: [String] = []
+    @State private var mode: ReconciliationMode?
+    @State private var categoryID: UUID?
+    @State private var projectID: UUID?
+    @State private var budgetMode = BudgetMode.automatic
+    @State private var revision: UInt64 = 0
     @State private var loaded = false
+    @State private var createCategory = false
     @FocusState private var focus: Bool
-    private var delta: Int64? { guard let db = model.db, let selected, let account = try? db.account(selected), let value = try? Money.parse(actual, currency: account.currency), let balance = try? db.balance(selected) else { return nil }; let (delta, overflow) = value.subtractingReportingOverflow(balance); return overflow ? nil : delta }
+    private var delta: Int64? {
+        guard let db = model.db, let selected, let account = try? db.account(selected), let value = try? Money.parse(actual,currency:account.currency), let balance = try? db.balance(selected) else { return nil }
+        let (v,overflow) = value.subtractingReportingOverflow(balance); return overflow ? nil : v
+    }
     var body: some View {
-        EditorFrame(title: "Сверить остаток", saveTitle: delta == 0 ? "Остаток совпадает" : "Сохранить корректировку", canSave: delta != nil, isDirty: loaded && [selected?.uuidString ?? "", actual, reason] != original, height: 480, onError: { _ in focus = true }, save: {
-            guard let db = model.db, let selected, let account = try? db.account(selected), let delta else { throw BudgetError.invalid("Укажите фактический остаток.") }; if delta != 0 { let amount = try Money.parse(actual, currency: account.currency); try model.commit { _ = try Ledger.reconcile(accountID: selected, observed: amount, reason: reason, in: &$0) } }
-        }) {
+        EditorFrame(title:"Сверить остаток",saveTitle:delta == 0 ? "Остаток совпадает" : mode?.title ?? "Выберите способ учёта",canSave:delta == 0 || (delta != nil && mode != nil),isDirty:loaded && (!actual.isEmpty || !reason.isEmpty || mode != nil || projectID != nil),height:660,save:save) {
             if let db = model.db {
-                if let account = db.accounts.first(where: { $0.id == accountID }) { Text(account.name).beeFont(.headline); Text("На " + CalendarDays.label(.today, full: true) + " · все операции текущего дня").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
-                else { FormField(title: "Счёт") { BeePicker("Счёт", selection: $selected) { Text("Выберите").tag(nil as UUID?); ForEach(db.accounts.filter { !$0.archived }) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() } }
-                if let selected, let account = try? db.account(selected) { Text("Учётный остаток: " + BeeFormat.money((try? db.balance(selected)) ?? 0, currency: account.currency)).foregroundStyle(BeeStyle.muted); FormField(title: "Фактический остаток · \(account.currency)") { TextField("0,00", text: $actual).textFieldStyle(BeeTextFieldStyle()).focused($focus) }; if let delta { Text(delta == 0 ? "Остатки совпадают — запись не требуется" : "Корректировка: " + BeeFormat.money(delta, currency: account.currency)).beeFont(.headline).foregroundStyle(delta < 0 ? BeeStyle.negative : BeeStyle.positive) } }
-                FormField(title: "Причина сверки", hint: "Обязательна при расхождении остатков.") { TextField("Кратко объясните расхождение", text: $reason).textFieldStyle(BeeTextFieldStyle()) }
+                FormField(title:"Счёт") { BeePicker("Счёт",selection:$selected) { Text("Выберите").tag(nil as UUID?); ForEach(db.accounts.filter { !$0.archived }) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
+                if let selected, let a = try? db.account(selected) {
+                    Text("Учётный остаток: " + BeeFormat.money((try? db.balance(selected)) ?? 0,currency:a.currency)).foregroundStyle(BeeStyle.muted)
+                    FormField(title:"Фактический остаток · \(a.currency)") { TextField("0,00",text:$actual).textFieldStyle(BeeTextFieldStyle()).focused($focus) }
+                    if let delta {
+                        Text(delta == 0 ? "Остатки совпадают — запись не нужна" : "Разница: " + BeeFormat.money(delta,currency:a.currency)).beeFont(.headline)
+                        if delta != 0 {
+                            FormField(title:"Как учесть разницу") { BeePicker("Способ",selection:$mode) {
+                                Text("Выберите").tag(nil as ReconciliationMode?)
+                                if a.kind == .ordinary { Text(delta < 0 ? "Записать расход" : "Записать доход").tag(Optional(delta < 0 ? ReconciliationMode.expense : .income)) }
+                                Text("Только корректировка").tag(Optional(ReconciliationMode.adjustment))
+                            }.labelsHidden() }
+                            if a.kind != .ordinary { Text("Тело долга/вклада не является расходом или доходом. Компоненты уточняются в договоре.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
+                            if let mode, mode != .adjustment {
+                                FormField(title:"Категория") { HStack { BeePicker("Категория",selection:$categoryID) {
+                                    Text("Без категории").tag(nil as UUID?)
+                                    ForEach(db.categories.filter { !$0.archived && !$0.system && $0.kind == (delta < 0 ? .expense : .income) }) { Text(db.categoryPath($0.id)).tag(Optional($0.id)) }
+                                }.labelsHidden(); if delta < 0 { Button("Операционные расходы") { operationalCategory() } } } }
+                                FormField(title:"Проект") { BeePicker("Проект",selection:$projectID) { Text("Без проекта").tag(nil as UUID?); ForEach(db.projects.filter { !$0.archived }) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
+                                if delta < 0 { BeePicker("Участие в бюджете",selection:$budgetMode) { ForEach(BudgetMode.allCases,id: \.self) { Text($0.title).tag($0) } } }
+                            }
+                        }
+                    }
+                }
+                FormField(title:"Причина сверки",hint:"Разница фиксируется одной записью; более ранние операции не меняют её автоматически.") { TextField("Кратко объясните расхождение",text:$reason).textFieldStyle(BeeTextFieldStyle()) }
             }
-        }.onAppear { guard !loaded else { return }; selected = accountID; original = [selected?.uuidString ?? "", actual, reason]; loaded = true; focus = true }
+        }.onAppear { guard !loaded else { return }; selected = accountID; revision = model.db?.revision ?? 0; loaded = true; focus = true }
+        .onChange(of:delta.map { $0 < 0 }) { _,_ in mode = nil; categoryID = nil }
+        .onChange(of:selected) { _,_ in mode = nil; categoryID = nil; revision = model.db?.revision ?? 0 }
+    }
+    private func operationalCategory() {
+        guard let db = model.db else { return }
+        if let c = db.categories.first(where:{ $0.kind == .expense && Ledger.normalized($0.name) == Ledger.normalized("Операционные расходы") && !$0.archived }) { categoryID = c.id; return }
+        let c = Category(name:"Операционные расходы",kind:.expense)
+        do { try model.commit { try Ledger.saveCategory(c,in:&$0) }; categoryID = c.id; revision = model.db?.revision ?? 0 } catch { model.error = error.localizedDescription }
+    }
+    private func save() throws {
+        guard let db = model.db, let selected, let a = try? db.account(selected), let delta else { throw BudgetError.invalid("Укажите фактический остаток.") }
+        if delta == 0 { return }; guard let mode else { throw BudgetError.invalid("Выберите способ учёта.") }
+        let amount = try Money.parse(actual,currency:a.currency)
+        do { try model.commit { _ = try Reconciliation.save(accountID:selected,observed:amount,reason:reason,mode:mode,categoryID:categoryID,projectID:projectID,budgetMode:budgetMode,expectedRevision:revision,in:&$0) } }
+        catch { revision = model.db?.revision ?? 0; throw error }
     }
 }
 
@@ -283,14 +330,24 @@ struct ProjectEditor: View {
     @EnvironmentObject var model: AppModel
     var id: UUID?
     var onSaved: (UUID) -> Void = { _ in }
+    @State private var details = ProjectDetails()
+    @State private var planningRevision: UInt64?
+    @State private var originalDetails: Data?
+    @State private var hasDate = false
+    @State private var date = Day.today.adding(365)
     @State private var name = ""
     @State private var description = ""
     @State private var loaded = false
     @State private var original: [String] = []
     @FocusState private var focus: Bool
     var body: some View {
-        EditorFrame(title: id == nil ? "Новый проект" : "Изменить проект", isDirty: loaded && [name, description] != original, height: 430, onError: { _ in focus = true }, save: save) { FormField(title: "Название") { TextField("Название проекта", text: $name).textFieldStyle(BeeTextFieldStyle()).focused($focus) }; FormField(title: "Описание") { TextField("Необязательно", text: $description, axis: .vertical).textFieldStyle(BeeTextFieldStyle()).lineLimit(3...5) } }
-            .onAppear { guard !loaded else { return }; if let project = model.db?.projects.first(where: { $0.id == id }) { name = project.name; description = project.description }; original = [name, description]; loaded = true; focus = true }
+        EditorFrame(title: id == nil ? "Новый проект" : "Изменить проект", isDirty: loaded && ([name, description] != original || (try? JSONEncoder().encode(details)) != originalDetails || hasDate != (details.dueOn != nil) || (hasDate && date != details.dueOn)), height: 650, onError: { _ in focus = true }, save: save) { FinanceChoice(title:"Тип проекта",value:$details.type,titleOf:{ $0.title })
+            CurrencyPicker(title:"Валюта плана",selection:$details.currency).disabled(!details.facts.isEmpty || !details.versions.isEmpty)
+            PlanningMoneyField(title:"Целевая сумма — можно уточнить позже",amount:$details.target,currency:details.currency)
+            Toggle("Есть целевая дата",isOn:$hasDate)
+            if hasDate { PlanningDateField(title:"Срок",day:$date) }
+            FormField(title: "Название") { TextField("Название проекта", text: $name).textFieldStyle(BeeTextFieldStyle()).focused($focus) }; FormField(title: "Описание") { TextField("Необязательно", text: $description, axis: .vertical).textFieldStyle(BeeTextFieldStyle()).lineLimit(3...5) } }
+            .onAppear { guard !loaded else { return }; planningRevision = model.db?.revision ?? 0; if let project = model.db?.projects.first(where: { $0.id == id }) { name = project.name; description = project.description; details = project.details ?? details }; original = [name, description]; originalDetails = try? JSONEncoder().encode(details); hasDate = details.dueOn != nil; date = details.dueOn ?? date; loaded = true; focus = true }
     }
-    private func save() throws { var project = model.db?.projects.first { $0.id == id } ?? Project(name: name); project.name = name; project.description = description; try model.commit { try Ledger.saveProject(project, in: &$0) }; onSaved(project.id) }
+    private func save() throws { var project = model.db?.projects.first { $0.id == id } ?? Project(name: name); project.name = name; project.description = description; details.dueOn = hasDate ? date : nil; project.details = details; try model.savePlanning(.project(project),expectedRevision:planningRevision); onSaved(project.id) }
 }

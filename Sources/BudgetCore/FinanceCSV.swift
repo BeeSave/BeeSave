@@ -12,6 +12,7 @@ struct FinanceCSVContract: Codable, Equatable {
 }
 struct FinanceCSVDetails: Codable, Equatable {
     var version = 1
+    var reconciliation: ReconciliationSource?
     var createdAt: Date
     var operation: FinanceOperationDetails?
     var contracts: [FinanceCSVContract]
@@ -19,7 +20,7 @@ struct FinanceCSVDetails: Codable, Equatable {
     var fulfillments: [FinanceFulfillment]
     var statements: [CreditStatement]?
     init(_ operation: Operation, db: Database) {
-        createdAt = operation.createdAt; self.operation = operation.financial
+        reconciliation = operation.reconciliation; createdAt = operation.createdAt; self.operation = operation.financial
         contracts = db.financeData.contracts.filter { $0.accountID == operation.accountID || $0.accountID == operation.toAccountID }.map(FinanceCSVContract.init)
         group = db.financeData.groups.first { $0.id == operation.financial?.groupID }
         fulfillments = db.financeData.fulfillments.filter { $0.operationIDs.contains(operation.id) }

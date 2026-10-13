@@ -58,7 +58,7 @@ public enum CSVCodec {
         for value in operations {
             let o = try materialized(value, db: db, accounts: accounts, cache: &resolved)
             guard let a = accounts[o.accountID] else { throw BudgetError.corrupt }; let to = o.toAccountID.flatMap { accounts[$0] }; let fx = String(decoding: try encoder.encode(o.fx), as: UTF8.self)
-            var values = ["2", o.id.uuidString, o.kind.rawValue, o.date.rawValue, a.id.uuidString, protect(a.name), a.currency, Money.string(o.amount, currency: a.currency), to?.id.uuidString ?? "", protect(to?.name ?? ""), to?.currency ?? "", o.toAmount.map { Money.string($0, currency: to?.currency ?? a.currency) } ?? "", o.kind.isFlow ? o.kind.rawValue : "", protect(o.kind.isFlow ? db.categoryPath(o.categoryID) : ""), protect(o.projectID.flatMap { projects[$0]?.name } ?? ""), o.budgetMode.rawValue, protect(o.comment), o.transferRate ?? "", fx, a.openedOn.rawValue, to?.openedOn.rawValue ?? ""]
+            var values = [o.reconciliation == nil ? "2" : "3", o.id.uuidString, o.kind.rawValue, o.date.rawValue, a.id.uuidString, protect(a.name), a.currency, Money.string(o.amount, currency: a.currency), to?.id.uuidString ?? "", protect(to?.name ?? ""), to?.currency ?? "", o.toAmount.map { Money.string($0, currency: to?.currency ?? a.currency) } ?? "", o.kind.isFlow ? o.kind.rawValue : "", protect(o.kind.isFlow ? db.categoryPath(o.categoryID) : ""), protect(o.projectID.flatMap { projects[$0]?.name } ?? ""), o.budgetMode.rawValue, protect(o.comment), o.transferRate ?? "", fx, a.openedOn.rawValue, to?.openedOn.rawValue ?? ""]
             let details = String(decoding: try encoder.encode(FinanceCSVDetails(o, db: db)), as: UTF8.self)
             values += [a.kind.rawValue, to?.kind.rawValue ?? "", o.financial?.groupID?.uuidString ?? "", details]
             lines.append(values.map(quote).joined(separator: ","))
@@ -139,8 +139,8 @@ public enum CSVImporter {
             var currentField = "формат записи"
             do {
                 guard record.fields.count == header.fields.count else { throw BudgetError.invalid("Число полей не совпадает с заголовком.") }
-                if canonical { guard ["1", "2"].contains(field("schema_version")) else { throw BudgetError.newerVersion } }
-                let v2 = canonical && field("schema_version") == "2"
+                if canonical { guard ["1", "2", "3"].contains(field("schema_version")) else { throw BudgetError.newerVersion } }
+                let v2 = canonical && ["2", "3"].contains(field("schema_version"))
                 let financialDetails: FinanceCSVDetails?
                 if v2 {
                     currentField = "finance_details"
@@ -184,6 +184,8 @@ public enum CSVImporter {
                 currentField = "operation_id"; if canonical { guard let id = UUID(uuidString: field("operation_id")) else { throw BudgetError.invalid("Невалидный UUID операции.") }; o.id = id }
                 currentField = "to_account / to_amount / transfer_rate"
                 if kind == .transfer { let b = try account(prefix: "to_"); o.toAccountID = b.id; o.toAmount = try Money.parse(field("to_amount"), currency: b.currency); o.transferRate = try Money.ratio(from: o.amount, currency: a.currency, to: o.toAmount!, toCurrency: b.currency); guard try field("transfer_rate").isEmpty || Money.decimal(field("transfer_rate")) == Money.decimal(o.transferRate!) else { throw BudgetError.invalid("Курс перевода не соответствует суммам.") } }
+                o.reconciliation = financialDetails?.reconciliation
+                if let source = o.reconciliation { try Reconciliation.validate(source) }
                 o.comment = text("comment")
                 currentField = "budget_mode"
                 if canonical { guard let mode = BudgetMode(rawValue: field("budget_mode")) else { throw BudgetError.invalid("Режим бюджета должен быть automatic или excluded.") }; o.budgetMode = mode }

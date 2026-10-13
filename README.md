@@ -2,7 +2,11 @@
 
 Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-BeeSave 1.8 shows compact Liquid Glass exchange rates beside the Home filters. USD and GBP are shown by default, excluding your base currency; choose up to five currencies in Settings → Currencies and Rates. Standard Home summaries use your base currency, and account balances also show their original currency.
+BeeSave 1.9 adds financial planning and projects. Plan regular income, living costs, obligations, savings, and major spending across upcoming periods. Explore mortgage prepayments, renovation budgets, and small-business projects with local participants. Russian personal income tax and deduction estimates cover supported cases for 2025 and 2026.
+
+Account reconciliation can record a balance difference as one income or expense, or as a neutral adjustment. Switch accounts between lists and cards. Home separates upcoming payments from useful reminders and shows actual and forecast income and expenses.
+
+Plans never create paid transactions automatically. Confirm a payment or link an existing transaction to account for it once. Forecasts show missing amounts or exchange rates, and conditional tax refunds do not cover obligations in the conservative plan. Country rules and contract terms are separate; unsupported taxes require a manual estimate.
 
 BeeSave brings your accounts, income, expenses, transfers, budgets, and reports together in one place. It supports multiple currencies, CSV import and export, encrypted storage, and full backups.
 

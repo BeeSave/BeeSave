@@ -20,8 +20,8 @@ public enum FinancialLedger {
         return result
     }
     public static func migrate(_ old: Database) throws -> Database {
-        guard (1...3).contains(old.version) else { throw BudgetError.newerVersion }
-        var db = old; db.version = 3
+        guard (1...4).contains(old.version) else { throw BudgetError.newerVersion }
+        var db = old; db.version = max(3, old.version)
         return db
     }
     public static func depositWarnings(_ operation: Operation, db: Database) throws -> [String] {
@@ -378,6 +378,7 @@ public enum FinancialLedger {
         for o in db.operations where ids.contains(o.id) { guard !(try db.account(o.accountID).archived), o.toAccountID.flatMap({ id in db.accounts.first { $0.id == id } })?.archived != true else { throw BudgetError.invalid("Верните затронутые счета из архива.") } }
         var candidate = db
         if group.title == "Закрытие депозита", let index = candidate.finances?.contracts.firstIndex(where: { $0.id == group.contractID }) { candidate.finances?.contracts[index].status = .active }
+        PlanningLedger.detach(ids,in:&candidate)
         candidate.operations.removeAll { ids.contains($0.id) }; candidate.finances?.groups.removeAll { $0.id == groupID }; candidate.finances?.fulfillments.removeAll { !$0.operationIDs.filter { ids.contains($0) }.isEmpty }
         ScheduledPayments.detachOperations(ids, in: &candidate)
         try Ledger.validate(candidate); db = candidate

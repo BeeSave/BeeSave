@@ -33,7 +33,8 @@ public enum ScheduledPaymentState: String, CaseIterable, Sendable {
 public enum ScheduledPayments {
     public static func paid(_ payment: ScheduledPayment, db: Database) throws -> Int64 {
         // Linked facts are validated on writes; deletion detaches their allocations atomically.
-        return try payment.allocations.reduce(0) { try Money.add($0, $1.amount) }
+        let operations = try payment.allocations.reduce(Int64(0)) { try Money.add($0,$1.amount) }
+        return try Money.add(operations,ProjectEngine.externalPaid(paymentID:payment.id,db:db))
     }
     public static func remaining(_ payment: ScheduledPayment, db: Database) throws -> Int64 { max(0, try Money.add(payment.amount, -paid(payment, db: db))) }
     public static func today(_ payment: ScheduledPayment, now: Date = Date()) -> Day {
@@ -75,7 +76,13 @@ public enum ScheduledPayments {
                 if book.scheduledPayments == nil { book.scheduledPayments = [] }; book.scheduledPayments!.append(payment)
             }
         }
-        candidate.finances = book; try validate(candidate); db = candidate
+        candidate.finances = book
+        for i in candidate.projects.indices {
+            guard var d = candidate.projects[i].details else { continue }
+            for j in d.costs.indices { if let id = d.costs[j].scheduledPaymentID,let payment = payments.first(where:{ $0.id == id }) { d.costs[j].amount = payment.amount; d.costs[j].dueOn = payment.dueOn } }
+            candidate.projects[i].details = d
+        }
+        try validate(candidate); try PlanningLedger.validate(candidate); db = candidate
     }
     public static func delete(_ id: UUID, in db: inout Database) { db.finances?.scheduledPayments?.removeAll { $0.id == id } }
     public static func detachOperations(_ ids: Set<UUID>, in db: inout Database) {

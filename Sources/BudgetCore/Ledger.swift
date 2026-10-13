@@ -16,6 +16,7 @@ public enum Ledger {
         else { db.accounts.append(a); if let opening, opening != 0 { db.operations.append(Operation(kind: .opening, date: a.openedOn, accountID: a.id, amount: opening)) } }
     }
     public static func deleteAccount(_ id: UUID, in db: inout Database) throws {
+        guard !db.planningData.flows.contains(where: { $0.accountID == id }), !db.planningData.goals.contains(where: { $0.accountID == id }) else { throw BudgetError.conflict("Счёт используется в плане или цели. Архивируйте его.") }
         guard !(db.financeData.scheduledPayments ?? []).contains(where: { $0.accountID == id }) else { throw BudgetError.conflict("Счёт используется в плановом платеже. Архивируйте его.") }
         guard db.contract(for: id) == nil, db.financeData.contracts.allSatisfy({ contract in contract.paymentAccountID != id && contract.terms.allSatisfy { $0.deposit.payoutAccountID != id && $0.loan.escrowAccountID != id } }) else { throw BudgetError.conflict("Счёт используется в финансовом договоре. Архивируйте его.") }
         guard !db.operations.contains(where: { $0.accountID == id || $0.toAccountID == id }), !db.reports.contains(where: { $0.filters.accounts.contains(id) }), !db.dashboard.contains(where: { $0.ownFilters?.accounts.contains(id) == true }), !db.settings.dashboardFilters.accounts.contains(id) else { throw BudgetError.conflict("Счёт используется в истории или фильтрах. Архивируйте его.") }
@@ -37,7 +38,7 @@ public enum Ledger {
         } else { db.categories.append(c) }
     }
     public static func categoryUsed(_ id: UUID, db: Database) -> Bool {
-        db.operations.contains { $0.categoryID == id } || (db.financeData.scheduledPayments ?? []).contains { $0.categoryID == id } || db.budgets.contains { $0.lines.contains { $0.categoryID == id } } || db.reports.contains { $0.filters.categories.contains(id) } || db.dashboard.contains { $0.ownFilters?.categories.contains(id) == true } || db.settings.dashboardFilters.categories.contains(id)
+        db.planningData.flows.contains { $0.categoryID == id } || db.operations.contains { $0.categoryID == id } || (db.financeData.scheduledPayments ?? []).contains { $0.categoryID == id } || db.budgets.contains { $0.lines.contains { $0.categoryID == id } } || db.reports.contains { $0.filters.categories.contains(id) } || db.dashboard.contains { $0.ownFilters?.categories.contains(id) == true } || db.settings.dashboardFilters.categories.contains(id)
     }
     public static func deleteCategory(_ id: UUID, in db: inout Database) throws {
         guard let c = db.categories.first(where: { $0.id == id }), !c.system, !categoryUsed(id, db: db), !db.categories.contains(where: { $0.parentID == id }) else { throw BudgetError.conflict("Категория используется или является системной. Доступно архивирование использованных категорий.") }
@@ -49,6 +50,9 @@ public enum Ledger {
         if let i = db.projects.firstIndex(where: { $0.id == p.id }) { db.projects[i] = p } else { db.projects.append(p) }
     }
     public static func deleteProject(_ id: UUID, in db: inout Database) throws {
+        guard !db.planningData.flows.contains(where: { $0.projectID == id }), !db.planningData.goals.contains(where: { $0.projectID == id }) else { throw BudgetError.conflict("Проект используется в плане или цели. Архивируйте его.") }
+        if let d = db.projects.first(where:{ $0.id == id })?.details { guard d.facts.isEmpty, d.versions.isEmpty, !d.costs.contains(where: \.contracted), d.loan?.contractID == nil else { throw BudgetError.conflict("Проект имеет факты, утверждённый план или обязательства. Архивируйте его.") } }
+
         guard !(db.financeData.scheduledPayments ?? []).contains(where: { $0.projectID == id }) else { throw BudgetError.conflict("Проект используется в плановом платеже. Архивируйте его.") }
         guard !db.operations.contains(where: { $0.projectID == id }), !db.budgets.contains(where: { $0.projectID == id }), !db.reports.contains(where: { $0.filters.projectID == id }), !db.dashboard.contains(where: { $0.ownFilters?.projectID == id }), db.settings.dashboardFilters.projectID != id else { throw BudgetError.conflict("Проект используется. Архивируйте его.") }
         db.projects.removeAll { $0.id == id }
@@ -57,7 +61,7 @@ public enum Ledger {
         var candidate = db
         let old = db.operations.first { $0.id == operation.id }
         try saveOperationUnchecked(operation, currencyConfirmed: currencyConfirmed, in: &candidate)
-        if let old { try ScheduledPayments.operationChanged(from: old, to: operation, in: &candidate) }
+        if let old { try ScheduledPayments.operationChanged(from: old, to: operation, in: &candidate); try PlanningLedger.operationChanged(from:old,to:operation,in:&candidate) }
         db = candidate
     }
     private static func saveOperationUnchecked(_ operation: Operation, currencyConfirmed: Bool, in db: inout Database) throws {
@@ -68,6 +72,7 @@ public enum Ledger {
             guard old.financial?.groupID == nil else { throw BudgetError.conflict("Изменение относится ко всей финансовой группе. Удалите её и подтвердите исправленный платёж.") }
             guard !(try db.account(old.accountID).archived), old.toAccountID.map({ id in db.accounts.first { $0.id == id }?.archived ?? true }) != true else { throw BudgetError.invalid("Верните затронутые счета из архива.") }
             if try db.account(old.accountID).currency != source.currency, !currencyConfirmed { throw BudgetError.invalid("Подтвердите сумму в новой валюте; обновите курсовые снимки.") }
+            guard old.reconciliation == o.reconciliation else { throw BudgetError.conflict("Первоначальное наблюдение сверки нельзя переписывать.") }
             if old.kind == .adjustment || old.kind == .opening { throw BudgetError.invalid("Корректировку исправляют удалением и новой сверкой. Начальный остаток задаётся при создании счёта.") }
             o.createdAt = old.createdAt
         }
@@ -92,6 +97,7 @@ public enum Ledger {
         guard let o = db.operations.first(where: { $0.id == id }) else { return }
         if let groupID = o.financial?.groupID { try FinancialLedger.deleteGroup(groupID, in: &db); return }
         guard !(try db.account(o.accountID).archived), o.toAccountID.flatMap({ to in db.accounts.first { $0.id == to } })?.archived != true else { throw BudgetError.invalid("Для удаления верните счета из архива.") }
+        PlanningLedger.detach([id], in: &db)
         db.operations.removeAll { $0.id == id }
         ScheduledPayments.detachOperations([id], in: &db)
         db.finances?.fulfillments.removeAll { $0.operationIDs.contains(id) }
@@ -147,7 +153,7 @@ public enum Ledger {
     }
     public static func validate(_ db: Database) throws {
         let today = Day.today
-        guard db.version <= 3 else { throw BudgetError.newerVersion }; guard (1...3).contains(db.version) else { throw BudgetError.corrupt }
+        guard db.version <= 4 else { throw BudgetError.newerVersion }; guard (1...4).contains(db.version) else { throw BudgetError.corrupt }
         if db.version == 1 { guard db.finances == nil, db.accounts.allSatisfy({ $0.kind == .ordinary }), db.operations.allSatisfy({ $0.financial == nil }) else { throw BudgetError.corrupt } }
         func unique<T>(_ values: [T], id: (T) -> UUID) throws { guard Set(values.map(id)).count == values.count else { throw BudgetError.corrupt } }
         try unique(db.accounts, id: \.id); try unique(db.categories, id: \.id); try unique(db.projects, id: \.id); try unique(db.operations, id: \.id); try unique(db.budgets, id: \.id); try unique(db.reports, id: \.id)
@@ -163,6 +169,7 @@ public enum Ledger {
         for kind in [OperationKind.expense, .income] { guard db.categories.filter({ $0.kind == kind && $0.system && !$0.archived && $0.parentID == nil && $0.name == "Без категории" }).count == 1 else { throw BudgetError.corrupt } }
         let accounts = Dictionary(uniqueKeysWithValues: db.accounts.map { ($0.id, $0) }); let projects = Set(db.projects.map(\.id)); var balances: [UUID: Int64] = [:]; var openings = Set<UUID>()
         for o in db.operations {
+            if let source = o.reconciliation { try Reconciliation.validate(source) }
             try validateOperation(o, accounts: accounts, categories: cats, projects: projects, today: today)
             if o.kind == .opening { guard openings.insert(o.accountID).inserted else { throw BudgetError.invalid("У счёта несколько начальных остатков.") } }
             balances[o.accountID] = try Money.add(balances[o.accountID] ?? 0, o.posting(for: o.accountID))
@@ -179,5 +186,6 @@ public enum Ledger {
         try Reports.validateFilters(db.settings.dashboardFilters, db: db)
         try FinancialLedger.validate(db)
         try ScheduledPayments.validate(db)
+        try PlanningLedger.validate(db)
     }
 }

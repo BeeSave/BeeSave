@@ -386,7 +386,7 @@ final class FinancialAccountTests: XCTestCase {
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as? [String: Any]); json.removeValue(forKey: "finances")
         let decoded = try JSONDecoder().decode(Database.self, from: JSONSerialization.data(withJSONObject: json))
         let migrated = try FinancialLedger.migrate(decoded); XCTAssertEqual(migrated.version, 3); XCTAssertEqual(migrated.accounts.first?.kind, .ordinary); XCTAssertEqual(try migrated.balance(account.id), -100); XCTAssertEqual(migrated.operations, old.operations)
-        var invalid = migrated; invalid.version = 4; XCTAssertThrowsError(try Ledger.validate(invalid))
+        var invalid = migrated; invalid.version = 5; XCTAssertThrowsError(try Ledger.validate(invalid))
     }
     func testMigrationWritesVerifiedOriginalBackupAndFailsWithoutChangingSource() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("finance-migration-" + UUID().uuidString); defer { try? FileManager.default.removeItem(at: root) }
@@ -396,7 +396,7 @@ final class FinancialAccountTests: XCTestCase {
         XCTAssertThrowsError(try store.unlock(key: key)); XCTAssertEqual(try Data(contentsOf: store.url), bytes); XCTAssertNil(store.db)
         let backups = try FileManager.default.contentsOfDirectory(at: root.appendingPathComponent("Backups.noindex"), includingPropertiesForKeys: nil)
         XCTAssertEqual(backups.count, 1); XCTAssertEqual(try VaultFile.read(Data(contentsOf: backups[0])).decrypt(key: key), old)
-        store.beforeWrite = nil; try store.unlock(key: key); XCTAssertEqual(store.db?.version, 3)
+        store.beforeWrite = nil; try store.unlock(key: key); XCTAssertEqual(store.db?.version, 4)
     }
     func testManualBankAndImageValidation() throws {
         var db = Database(); let bank = UserBank(name: "Мой банк", country: .gb); try FinancialLedger.saveBank(bank, in: &db)

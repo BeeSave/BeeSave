@@ -484,6 +484,7 @@ struct FinancialCalendarView: View {
     var body: some View {
         let rows = ordered
         ScrollView { LazyVStack(alignment: .leading, spacing: 18) {
+            PlanningCalendarList()
             SectionHeading(title: "Календарь") { Button("Запланировать расход") { model.sheet = SheetRoute(kind: .scheduledPayment) }; Toggle("Исполненные", isOn: $includeFulfilled).toggleStyle(.checkbox); Button("Пересчитать") { model.refreshFinancialForecasts() }; if model.financialBusy { ProgressView().controlSize(.small); Button("Отмена") { model.cancelFinancialForecasts() } } }
             BeePicker("События", selection: $scope) { Text("Все").tag(0); Text("Финансовые счета").tag(1); Text("Запланированные расходы").tag(2) }.beePickerStyle(.segmented)
             Text("Планируемые суммы не входят в фактические доходы, расходы и остатки. Минимальный платёж и погашение для льготы могут относиться к одному долгу.").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted)
@@ -770,16 +771,15 @@ struct FinancialDashboardSummary: View {
         if let db = model.db, !db.financeData.contracts.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack { Text("Финансовые счета").beeFont(.headline); Spacer(); Button("Календарь") { model.section = .financialCalendar } }
-                let events = upcomingEvents()
                 let debtRows = debt(db)
-                if let total = try? Reports.total(debtRows) { Text("Задолженность: " + BeeFormat.valuation(total, currency: db.settings.reportCurrency)).beeFont(.title3).monospacedDigit() }
-                ForEach(Array(events.prefix(3))) { event in
-                    if let contract = db.financeData.contracts.first(where: { $0.id == event.contractID }), let account = try? db.account(contract.accountID) {
-                        Button { model.openHistory(account.id) } label: { HStack { Text(CalendarDays.label(event.date)); Text(account.name + " · " + event.kind.title).lineLimit(1); Spacer(); Text(event.remaining.map { BeeFormat.money($0, currency: account.currency) } ?? "Уточните сумму") } }.buttonStyle(BeeRowStyle())
-                    }
+                if !debtRows.isEmpty,let total = try? Reports.total(debtRows) { Text("Задолженность: " + BeeFormat.valuation(total, currency: db.settings.baseCurrency)).beeFont(.title3).monospacedDigit() }
+                let depositIDs = Set(db.accounts.filter { $0.kind == .deposit }.map(\.id))
+                if !depositIDs.isEmpty { var filter = Filters(); let _ = filter.accounts = depositIDs; let _ = filter.includeArchived = true
+                    if let balances = try? Reports.balances(db,filters:filter,currency:db.settings.baseCurrency),let total = try? Reports.total(balances) { Text("На вкладах: " + BeeFormat.valuation(total,currency:db.settings.baseCurrency)).beeFont(.title3).monospacedDigit() }
                 }
+                Button("Открыть финансовые счета") { model.section = .accounts }
                 if model.financialBusy { ProgressView("Пересчёт графиков…").controlSize(.small) }
-                Text("Долг включает архивные счета. Предстоящие суммы показаны отдельно от фактических расходов.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
+                Text("Вклады доступны по условиям договора. Долг включает архивные счета; будущие выплаты показаны отдельно.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             }.beeCard()
         }
     }
@@ -795,7 +795,7 @@ struct FinancialDashboardSummary: View {
         }
         return nearest
     }
-    private func debt(_ db: Database) -> [ReportRow] { var report = Report(name: "Долг"); report.dataset = .debt; report.metric = .balance; report.grouping = .account; report.filters = Filters(); report.currency = db.settings.reportCurrency; return (try? FinancialReports.rows(report, db: db)) ?? [] }
+    private func debt(_ db: Database) -> [ReportRow] { var report = Report(name: "Долг"); report.dataset = .debt; report.metric = .balance; report.grouping = .account; report.filters = Filters(); report.currency = db.settings.baseCurrency; return (try? FinancialReports.rows(report, db: db)) ?? [] }
 }
 
 struct FinancialGroupEditor: View {

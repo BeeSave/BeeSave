@@ -9,6 +9,7 @@ public enum BudgetMode: String, Codable, CaseIterable, Sendable { case automatic
     public var title: String { self == .automatic ? "Автоматически" : "Вне бюджетов" }
 }
 public struct Account: Codable, Identifiable, Equatable, Sendable {
+    public var businessProjectID: UUID?
     public var financialKind: AccountKind?; public var bankID: String?; public var contractID: UUID?
     public var kind: AccountKind { financialKind ?? .ordinary }
     public var id = UUID(); public var name: String; public var currency: String; public var openedOn: Day; public var archived = false; public var createdAt = Date(); public var modifiedAt = Date()
@@ -19,6 +20,7 @@ public struct Category: Codable, Identifiable, Equatable, Sendable {
     public init(name: String, kind: OperationKind, parentID: UUID? = nil, system: Bool = false) { self.name = name; self.kind = kind; self.parentID = parentID; self.system = system }
 }
 public struct Project: Codable, Identifiable, Equatable, Sendable {
+    public var details: ProjectDetails?
     public var id = UUID(); public var name: String; public var description: String = ""; public var archived = false
     public init(name: String, description: String = "") { self.name = name; self.description = description }
 }
@@ -29,6 +31,7 @@ public struct FXRate: Codable, Identifiable, Equatable, Sendable {
     public var stale: Bool { date < Day.today.adding(-7) }
 }
 public struct Operation: Codable, Identifiable, Equatable, Sendable {
+    public var reconciliation: ReconciliationSource?
     public var financial: FinanceOperationDetails?
     public var id = UUID(); public var kind: OperationKind; public var date: Day; public var accountID: UUID; public var amount: Int64; public var toAccountID: UUID?; public var toAmount: Int64?; public var categoryID: UUID?; public var projectID: UUID?; public var comment = ""; public var budgetMode = BudgetMode.automatic; public var transferRate: String?; public var fx: [FXRate] = []; public var observedBalance: Int64?; public var createdAt = Date(); public var modifiedAt = Date()
     public init(kind: OperationKind, date: Day = .today, accountID: UUID, amount: Int64) { self.kind = kind; self.date = date; self.accountID = accountID; self.amount = amount }
@@ -92,8 +95,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
 public struct Database: Codable, Equatable, Sendable {
     /// Optional for decoding version-1 files written before revision tracking was introduced.
     public var revision: UInt64? = 0
+    public var planning: PlanningBook?
     public var finances: FinancialBook?
-    public var version = 3; public var id = UUID(); public var accounts: [Account] = []; public var categories: [Category] = [Category(name: "Без категории", kind: .expense, system: true), Category(name: "Без категории", kind: .income, system: true)]; public var projects: [Project] = []; public var operations: [Operation] = []; public var budgets: [Budget] = []; public var rates: [FXRate] = []; public var reports: [Report] = []; public var dashboard = DashboardBlock.defaults; public var imports: [ImportBatch] = []; public var settings = AppSettings()
+    public var version = 4; public var id = UUID(); public var accounts: [Account] = []; public var categories: [Category] = [Category(name: "Без категории", kind: .expense, system: true), Category(name: "Без категории", kind: .income, system: true)]; public var projects: [Project] = []; public var operations: [Operation] = []; public var budgets: [Budget] = []; public var rates: [FXRate] = []; public var reports: [Report] = []; public var dashboard = DashboardBlock.defaults; public var imports: [ImportBatch] = []; public var settings = AppSettings()
     public init() {}
     public func account(_ id: UUID) throws -> Account { guard let a = accounts.first(where: { $0.id == id }) else { throw BudgetError.missing("Счёт не найден.") }; return a }
     public func categoryPath(_ id: UUID?) -> String { guard let c = categories.first(where: { $0.id == id }) else { return "—" }; if let p = categories.first(where: { $0.id == c.parentID }) { return p.name + " / " + c.name }; return c.name }

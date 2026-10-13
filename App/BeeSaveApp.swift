@@ -78,6 +78,11 @@ struct RootView: View {
         #endif
         .sheet(item: Binding(get: { active ? model.sheet : nil }, set: { model.sheet = $0 })) { route in
             switch route.kind {
+            case .planFlow: PlanFlowEditor(id: route.entityID)
+            case .savingsGoal: SavingsGoalEditor(id: route.entityID)
+            case .taxProfile: TaxProfileEditor(id: route.entityID)
+            case .eventSettings: PlanningEventSettingsEditor()
+            case .planFact: PlanFactEditor(flowID: route.entityID)
             case .account: AccountEditor(id: route.entityID)
             case .bank: BankEditor()
             case .financialPayment: FinancialGroupEditor(groupID: route.entityID)
@@ -103,16 +108,23 @@ struct RootView: View {
     #if DEBUG && UI_SMOKE
     private var qaActions: some View {
         Group {
+            Button("019 · Узкое окно 200%") { appearanceStore.update { $0.textPercent = 200 }; BudgetWindows.preferred(ordered:NSApp.orderedWindows + NSApp.windows,key:NSApp.keyWindow)?.setContentSize(NSSize(width:1000,height:700)) }
+            Button("019 · Обычное окно 100%") { appearanceStore.update { $0.textPercent = 100 }; BudgetWindows.preferred(ordered:NSApp.orderedWindows + NSApp.windows,key:NSApp.keyWindow)?.setContentSize(NSSize(width:1440,height:900)) }
+            Button("019 · Светлая тема") { appearanceStore.update { $0.theme = .beeSave }; model.previewAppearance = .light; appearanceStore.previewColorScheme = .light }
+            Button("019 · Тёмная тема") { appearanceStore.update { $0.theme = .beeSave }; model.previewAppearance = .dark; appearanceStore.previewColorScheme = .dark }
+            Button("019 · Меньше движения и прозрачности") { model.previewReduceMotion = true; model.previewReduceTransparency = true }
+            Button("019 · Восстановить движение и прозрачность") { model.previewReduceMotion = false; model.previewReduceTransparency = false }
+            Button("019 · 100 вымышленных счетов") { model.preparePlanningAccountVolumeQA() }
             Menu("Оформление QA") {
                 Button("Проверка экранов…") { openWindow(id: "appearance-screens") }
                 ForEach(AppearanceTheme.allCases) { theme in
-                    ForEach([100, 110, 125, 140, 160], id: \.self) { percent in
+                    ForEach(AppearancePreferences.scales, id: \.self) { percent in
                         Button(theme.title + " · \(percent)%") { appearanceStore.update { $0.theme = theme; $0.textPercent = percent } }
                     }
                 }
                 Button("Окно 1440 × 900") { BudgetWindows.preferred(ordered: NSApp.orderedWindows + NSApp.windows, key: NSApp.keyWindow)?.setContentSize(NSSize(width: 1440, height: 900)) }
             }
-            Menu("Тестовые состояния") { ForEach(PreviewScenario.allCases, id: \.self) { state in Button(state.title) { model.loadPreview(state) } }; Divider(); Button("Замер · Главная") { model.measureFixturePresentation(.dashboard) }; Button("Замер · Счета") { model.measureFixturePresentation(.accounts) }; Button("Замер · Календарь") { model.measureFixturePresentation(.financialCalendar) }; Button("Замер · Платёж") { model.measureFixturePayment() }; Divider(); Button("Логотипы банков…") { showBankBrands = true }; Button("Светлая тема") { model.previewAppearance = .light; appearanceStore.previewColorScheme = .light }; Button("Тёмная тема") { model.previewAppearance = .dark; appearanceStore.previewColorScheme = .dark }; Button("Системная тема") { model.previewAppearance = nil; appearanceStore.previewColorScheme = nil }; Divider(); Button("Минимальное окно 1000 × 700") { BudgetWindows.preferred(ordered: NSApp.orderedWindows + NSApp.windows, key: NSApp.keyWindow)?.setContentSize(NSSize(width: 1000, height: 700)) }; Button("Обычное окно 1260 × 840") { BudgetWindows.preferred(ordered: NSApp.orderedWindows + NSApp.windows, key: NSApp.keyWindow)?.setContentSize(NSSize(width: 1260, height: 840)) } }
+            Menu("Тестовые состояния") { ForEach(PreviewScenario.allCases, id: \.self) { state in Button(state.title) { model.loadPreview(state) } }; Divider(); Button("Планировщик 019 · вымышленные данные") { model.preparePlanning019QA() }; Button("Замер · Главная") { model.measureFixturePresentation(.dashboard) }; Button("Замер · Счета") { model.measureFixturePresentation(.accounts) }; Button("Замер · Календарь") { model.measureFixturePresentation(.financialCalendar) }; Button("Замер · Платёж") { model.measureFixturePayment() }; Divider(); Button("Логотипы банков…") { showBankBrands = true }; Button("Светлая тема") { model.previewAppearance = .light; appearanceStore.previewColorScheme = .light }; Button("Тёмная тема") { model.previewAppearance = .dark; appearanceStore.previewColorScheme = .dark }; Button("Системная тема") { model.previewAppearance = nil; appearanceStore.previewColorScheme = nil }; Divider(); Button("Минимальное окно 1000 × 700") { BudgetWindows.preferred(ordered: NSApp.orderedWindows + NSApp.windows, key: NSApp.keyWindow)?.setContentSize(NSSize(width: 1000, height: 700)) }; Button("Обычное окно 1260 × 840") { BudgetWindows.preferred(ordered: NSApp.orderedWindows + NSApp.windows, key: NSApp.keyWindow)?.setContentSize(NSSize(width: 1260, height: 840)) } }
             Divider()
             Menu("Валюты QA") {
                 Button("Согласованная Главная · 017") { model.prepareHome017QA() }

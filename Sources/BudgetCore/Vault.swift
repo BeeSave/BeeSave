@@ -100,7 +100,7 @@ public final class VaultStore {
         db = database; key = dataKey; bootstrap = file.bootstrap; session = UUID()
     }
     private func prepareMigration(_ original: Database, file: VaultFile, key: Data) throws -> Database {
-        guard original.version < 3 else { return original }
+        guard original.version < 4 else { return original }
         let folder = url.deletingLastPathComponent().appendingPathComponent("Backups.noindex", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let destination = folder.appendingPathComponent("schema-" + String(original.version) + "-" + UUID().uuidString + ".mubak")
@@ -108,7 +108,7 @@ public final class VaultStore {
         try CiphertextFile.write(backup, to: destination)
         let checked = try VaultFile.read(Data(contentsOf: destination)).decrypt(key: key)
         guard checked == original else { throw BudgetError.storage("Исходная копия перед обновлением схемы не прошла проверку; бюджет сохранён без изменений.") }
-        return try FinancialLedger.migrate(original)
+        return try PlanningLedger.migrate(original)
     }
     public func unlock(password: String) throws { let b = try inspect(); guard let env = b.password else { throw BudgetError.invalid("Задайте пароль с помощью ключа восстановления.") }; try unlock(key: VaultCrypto.unwrapPassword(env, password: password)) }
     public func unlock(recovery: String) throws { let file = try VaultFile.read(Data(contentsOf: url)); try unlock(key: file.recoveryUnlock(recovery)) }
@@ -173,7 +173,7 @@ public final class VaultStore {
     public func restore(database: Database, dataKey: Data, bootstrap: Bootstrap, safetyCopy: URL?) throws {
         try acquire(); try Ledger.validate(database)
         if exists { guard let safetyCopy else { throw BudgetError.invalid("Перед заменой требуется полная копия текущих данных.") }; try backup(to: safetyCopy) }
-        let migrated = try FinancialLedger.migrate(database)
+        let migrated = try PlanningLedger.migrate(database)
         try persist(migrated, key: dataKey, bootstrap: bootstrap); db = migrated; key = dataKey; self.bootstrap = bootstrap; session = UUID()
     }
     public func close() {

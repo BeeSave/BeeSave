@@ -92,6 +92,10 @@ struct ScheduledPaymentDetail: View {
                     Text("План: " + BeeFormat.money(p.amount, currency: p.currency)); Text("Оплачено: " + BeeFormat.money((try? ScheduledPayments.paid(p, db: db)) ?? 0, currency: p.currency)); Text("Осталось: " + BeeFormat.money((try? ScheduledPayments.remaining(p, db: db)) ?? p.amount, currency: p.currency)).beeFont(.title3)
                     if let paid = try? ScheduledPayments.paid(p, db: db), paid > p.amount || p.originalAmount != nil { Text("Исходный план: " + BeeFormat.money(p.originalAmount ?? p.amount, currency: p.currency)); if let difference = try? Money.add(paid, -(p.originalAmount ?? p.amount)) { Text("Разница факта и исходного плана: " + BeeFormat.money(difference, currency: p.currency)).foregroundStyle(BeeStyle.warning) } }
                     if !p.payee.isEmpty { Text("Получатель: " + p.payee) }; if !p.contractReference.isEmpty { Text("Договор: " + p.contractReference) }
+                    if let external = try? ProjectEngine.externalPaid(paymentID:p.id,db:db),external > 0 {
+                        Text("Оплачено участниками проекта напрямую: " + BeeFormat.money(external,currency:p.currency)).beeFont(.caption).foregroundStyle(BeeStyle.muted)
+                        if let project = db.projects.first(where:{ $0.details?.costs.contains(where:{ $0.scheduledPaymentID == p.id }) == true }) { Button("Открыть основание в проекте") { model.planningProjectID = project.id; model.section = .projects; dismiss() } }
+                    }
                     Divider(); Text("Напоминания").beeFont(.headline)
                     if p.cancelled || p.archived || (try? ScheduledPayments.remaining(p, db: db)) == 0 { Text("Платёж закрыт: будущие системные напоминания по нему не планируются.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                     ForEach(p.reminders) { r in Text((r.enabled ? "" : "Выключено · ") + (r.date.map { CalendarDays.label($0) } ?? "За \(r.daysBefore ?? 0) дн.") + String(format: " · %02d:%02d", r.hour, r.minute)).beeFont(.callout) }

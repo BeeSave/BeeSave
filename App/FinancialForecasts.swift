@@ -41,7 +41,7 @@ extension AppModel {
             let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
             guard !Task.isCancelled, financialCalculationID == calculation else { return }
             guard db?.id == snapshot.id, db?.revision == snapshot.revision else { refreshFinancialForecasts(); return }
-            financialEvents = result.0; financialErrors = result.1; financialDebts = result.2; financialBusy = false; handleFinancialNotification()
+            financialEvents = result.0; financialErrors = result.1; financialDebts = result.2; financialBusy = false; refreshPlanning(); handleFinancialNotification()
             #if DEBUG && UI_SMOKE && NOTIFICATION_QA
             // Inspect delivery from a closed fixture app before replacing its database / queue.
             guard notificationQAActive else { return }

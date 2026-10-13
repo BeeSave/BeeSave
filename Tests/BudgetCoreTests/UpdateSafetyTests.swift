@@ -2,7 +2,7 @@ import XCTest
 @testable import BudgetCore
 
 final class UpdateSafetyTests: XCTestCase {
-    private func fixture(schema: Int = 3) throws -> (URL, VaultStore, UpdateSafetyStore, URL) {
+    private func fixture(schema: Int = 4) throws -> (URL, VaultStore, UpdateSafetyStore, URL) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let vault = VaultStore(url: root.appendingPathComponent("vault.beesave"))
         var database = Database()
@@ -74,7 +74,7 @@ final class UpdateSafetyTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: safety.snapshot(for: record).path))
     }
     func testSchemaMigrationCanCompleteUpdateVerification() throws {
-        for schema in [1, 2] {
+        for schema in [1, 2, 3] {
             let (root, vault, safety, app) = try fixture(schema: schema)
             defer { vault.close(); try? FileManager.default.removeItem(at: root) }
             let original = try XCTUnwrap(vault.db)
@@ -82,7 +82,7 @@ final class UpdateSafetyTests: XCTestCase {
             record.phase = .handedOff; try safety.write(record)
             let snapshot = try Data(contentsOf: safety.snapshot(for: record))
             vault.close(); try vault.unlock(password: "Original password 123")
-            XCTAssertEqual(vault.db, try FinancialLedger.migrate(original))
+            XCTAssertEqual(vault.db, try PlanningLedger.migrate(original))
             XCTAssertNoThrow(try safety.removeVerified(record, vault: vault, version: "1.3.1", build: 12, application: app))
             XCTAssertTrue(try safety.pending().isEmpty)
             let copies = try FileManager.default.contentsOfDirectory(at: root.appendingPathComponent("Backups.noindex"), includingPropertiesForKeys: nil)
