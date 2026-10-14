@@ -464,6 +464,7 @@ struct FinancialCalendarView: View {
     @State private var bankFilter: String?
     @State private var from = ""
     @State private var through = ""
+    private let workspaceRoute = WorkspaceRoute(.plan, calendar: .contracts)
     private var contracts: [FinancialContract] { guard let db = model.db else { return [] }; return db.financeData.contracts.filter { contract in contract.status != .closed && (accountFilter == nil || contract.accountID == accountFilter) && (typeFilter == nil || contract.kind == typeFilter) && (bankFilter == nil || db.accounts.first(where: { $0.id == contract.accountID })?.bankID == bankFilter) } }
     private func selectedEvents(_ id: UUID) -> [FinanceEvent] { let first = try? Day(from), last = try? Day(through); return (model.financialEvents[id] ?? []).filter { (includeFulfilled || !$0.isFulfilled) && (first == nil || $0.date >= first!) && (last == nil || $0.date <= last!) } }
     private var ordered: [FinanceCalendarSelection] {
@@ -484,7 +485,6 @@ struct FinancialCalendarView: View {
     var body: some View {
         let rows = ordered
         ScrollView { LazyVStack(alignment: .leading, spacing: 18) {
-            PlanningCalendarList()
             SectionHeading(title: "Календарь") { Button("Запланировать расход") { model.sheet = SheetRoute(kind: .scheduledPayment) }; Toggle("Исполненные", isOn: $includeFulfilled).toggleStyle(.checkbox); Button("Пересчитать") { model.refreshFinancialForecasts() }; if model.financialBusy { ProgressView().controlSize(.small); Button("Отмена") { model.cancelFinancialForecasts() } } }
             BeePicker("События", selection: $scope) { Text("Все").tag(0); Text("Финансовые счета").tag(1); Text("Запланированные расходы").tag(2) }.beePickerStyle(.segmented)
             Text("Планируемые суммы не входят в фактические доходы, расходы и остатки. Минимальный платёж и погашение для льготы могут относиться к одному долгу.").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted)
@@ -506,7 +506,16 @@ struct FinancialCalendarView: View {
                 else if let p = selection.scheduled { ScheduledPaymentCard(payment: p) }
             }
             if rows.isEmpty && !model.financialBusy { EmptyState(title: "Нет событий", detail: "Проверьте фильтры и условия договоров.").beeCard() }
-        }.padding(26) }.sheet(item: $payment) { selection in if let contract = selection.contract { FinancialPaymentEditor(contract: contract, event: selection.event) } }
+        }.padding(26).background(WorkspaceScrollMemory(route: workspaceRoute)) }.sheet(item: $payment) { selection in if let contract = selection.contract { FinancialPaymentEditor(contract: contract, event: selection.event) } }
+        .onAppear { let value = model.navigation.context(for: workspaceRoute); search = value.search; includeFulfilled = value.includeFulfilled; scope = value.financialScope; accountFilter = value.filters.accounts.first; typeFilter = value.accountKind; bankFilter = value.bankID; from = value.financialFrom; through = value.financialThrough }
+        .onChange(of: search) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.search = value } }
+        .onChange(of: scope) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.financialScope = value } }
+        .onChange(of: includeFulfilled) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.includeFulfilled = value } }
+        .onChange(of: accountFilter) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.filters.accounts = value.map { [$0] } ?? [] } }
+        .onChange(of: typeFilter) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.accountKind = value } }
+        .onChange(of: bankFilter) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.bankID = value } }
+        .onChange(of: from) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.financialFrom = value } }
+        .onChange(of: through) { _, value in model.updateWorkspaceContext(workspaceRoute) { $0.financialThrough = value } }
     }
 }
 private struct FinanceCalendarSelection: Identifiable { var id: String { event.id }; var contract: FinancialContract?; var scheduled: ScheduledPayment?; var event: FinanceEvent }

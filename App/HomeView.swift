@@ -26,17 +26,20 @@ struct HomeView: View {
                 }
         } detail: {
             VStack(spacing: 0) {
+                if model.navigation.canGoBack {
+                    HStack {
+                        Button(model.backDestinationTitle, systemImage: "chevron.left") { model.navigateBack() }
+                            .help("Вернуться к исходной странице с её фильтрами")
+                        Spacer()
+                    }.beeFont(.caption).padding(.horizontal, 26).padding(.top, 12)
+                }
                 if let message = model.backupError { HStack { Label(message, systemImage: "exclamationmark.triangle.fill"); Spacer(); Button("Выбрать папку") { model.changeBackupFolder() } }.beeFont(.caption).padding(12).foregroundStyle(BeeStyle.negative).background(BeeStyle.surface) }
-                switch model.section {
-                case .dashboard: DashboardView()
+                switch model.navigation.current.section {
+                case .overview: DashboardView()
                 case .accounts: AccountsView()
-                case .planning: PlanningView()
+                case .plan: PlanningView()
                 case .projects: ProjectsView()
-                case .expenses: ExpensesView()
-                case .incomes: OperationsView(kind: .income)
-                case .budgets: BudgetsView()
-                case .references: ReferencesView()
-                    case .financialCalendar: FinancialCalendarView()
+                case .operations: OperationsWorkspace()
                 }
             }.frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity).beeNavigationContent().navigationTitle(model.section.rawValue).environment(\.beeToolbarActions, true)
 
@@ -52,15 +55,16 @@ struct HomeView: View {
 struct AccountsView: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
-    @State private var archived = false
-    @State private var financialKind: AccountKind?
-    @State private var accountSearch = ""
+    private var route: WorkspaceRoute { WorkspaceRoute(.accounts) }
+    private var archived: Binding<Bool> { Binding(get: { model.navigation.context(for: route).archived }, set: { value in model.updateWorkspaceContext(route) { $0.archived = value } }) }
+    private var financialKind: Binding<AccountKind?> { Binding(get: { model.navigation.context(for: route).accountKind }, set: { value in model.updateWorkspaceContext(route) { $0.accountKind = value } }) }
+    private var accountSearch: Binding<String> { Binding(get: { model.navigation.context(for: route).search }, set: { value in model.updateWorkspaceContext(route) { $0.search = value } }) }
     var body: some View { if let db = model.db {
         if let id = model.historyAccount, let account = db.accounts.first(where: { $0.id == id }) {
             if account.kind == .ordinary {
                 VStack(alignment: .leading, spacing: 14) {
                     historyHeader(account, db: db)
-                    OperationsView(accountID: id)
+                    OperationsView(accountID: id, workspaceRoute: WorkspaceRoute(.accounts, objectID: id))
                 }
             } else {
                 GeometryReader { geometry in
@@ -68,31 +72,31 @@ struct AccountsView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             historyHeader(account, db: db)
                             FinancialAccountDetail(accountID: id)
-                            OperationsView(accountID: id)
+                            OperationsView(accountID: id, workspaceRoute: WorkspaceRoute(.accounts, objectID: id))
                                 .frame(height: max(420 * appearanceStore.preferences.scale, geometry.size.height - 320 * appearanceStore.preferences.scale))
                         }
                     }
                 }
             }
         } else { ScrollView { LazyVStack(alignment: .leading, spacing: 18) {
-            SectionHeading(title: "Мои счета") { Button("Новый счёт", systemImage: "plus") { model.sheet = SheetRoute(kind: .account) }.buttonStyle(BeePrimaryStyle()) }
-            BeeSegments(title: "Список счетов", labels: ["Активные", "Архив"], selection: Binding(get: { archived ? 1 : 0 }, set: { archived = $0 == 1 }))
+            SectionHeading(title: "Счета") { Button("Новый счёт", systemImage: "plus") { model.sheet = SheetRoute(kind: .account) }.buttonStyle(BeePrimaryStyle()) }
+            BeeSegments(title: "Список счетов", labels: ["Активные", "Архив"], selection: Binding(get: { archived.wrappedValue ? 1 : 0 }, set: { archived.wrappedValue = $0 == 1 }))
                 .frame(maxWidth: 560 * pow(appearanceStore.preferences.scale, 0.5)).frame(maxWidth: .infinity)
-            BeePicker("Тип счёта", selection: $financialKind) { Text("Все типы").tag(nil as AccountKind?); ForEach(AccountKind.allCases, id: \.self) { Text($0.title).tag(Optional($0)) } }.frame(maxWidth: 300 * appearanceStore.preferences.scale)
+            BeePicker("Тип счёта", selection: financialKind) { Text("Все типы").tag(nil as AccountKind?); ForEach(AccountKind.allCases, id: \.self) { Text($0.title).tag(Optional($0)) } }.frame(maxWidth: 300 * appearanceStore.preferences.scale)
             VStack(alignment:.leading,spacing:12) {
-                TextField("Найти счёт, банк или валюту",text:$accountSearch).textFieldStyle(BeeTextFieldStyle())
+                TextField("Найти счёт, банк или валюту",text:accountSearch).textFieldStyle(BeeTextFieldStyle())
                 WrappingLayout(spacing:12) { BeeSegments(title:"Вид счетов",labels:["Список","Карточки"],selection:Binding(get:{ db.planningData.accountCards ? 1 : 0 },set:{ model.changePlanning(.accountView($0 == 1,db.planningData.accountSort)) })).frame(width:240 * appearanceStore.preferences.scale)
                 BeePicker("Сортировка",selection:Binding(get:{ db.planningData.accountSort },set:{ model.changePlanning(.accountView(db.planningData.accountCards,$0)) })) { Text("Название").tag("name"); Text("Валюта").tag("currency"); Text("Остаток").tag("balance") }.labelsHidden().frame(width:180 * appearanceStore.preferences.scale) }
             }
-            let visible = db.accounts.filter { $0.archived == archived && (financialKind == nil || $0.kind == financialKind) && (accountSearch.isEmpty || ($0.name + " " + $0.currency + " " + (db.financialBankName($0.bankID) ?? $0.bankID ?? "")).localizedCaseInsensitiveContains(accountSearch)) }.sorted { lhs,rhs in
+            let visible = db.accounts.filter { $0.archived == archived.wrappedValue && (financialKind.wrappedValue == nil || $0.kind == financialKind.wrappedValue) && (accountSearch.wrappedValue.isEmpty || ($0.name + " " + $0.currency + " " + (db.financialBankName($0.bankID) ?? $0.bankID ?? "")).localizedCaseInsensitiveContains(accountSearch.wrappedValue)) }.sorted { lhs,rhs in
                 if db.planningData.accountSort == "currency",lhs.currency != rhs.currency { return lhs.currency < rhs.currency }
                 if db.planningData.accountSort == "balance" && lhs.currency != rhs.currency { return lhs.currency < rhs.currency }
                 if db.planningData.accountSort == "balance" { let a = (try? db.balance(lhs.id)) ?? 0,b = (try? db.balance(rhs.id)) ?? 0; if a != b { return a > b } }
                 return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
             }
             if visible.isEmpty {
-                EmptyState(title: archived ? "В архиве пока нет счетов" : db.accounts.isEmpty ? "Добавьте первый счёт" : "Нет активных счетов",
-                           detail: archived ? "Архивные счета сохраняют свою историю. Их можно вернуть в активные." : db.accounts.isEmpty ? "Карта, накопления или наличные — валюта и начальный остаток." : "Выберите другой тип счёта или добавьте новый.", icon: archived ? "archivebox" : "wallet.bifold").beeCard()
+                EmptyState(title: archived.wrappedValue ? "В архиве пока нет счетов" : db.accounts.isEmpty ? "Добавьте первый счёт" : "Нет активных счетов",
+                           detail: archived.wrappedValue ? "Архивные счета сохраняют свою историю. Их можно вернуть в активные." : db.accounts.isEmpty ? "Карта, накопления или наличные — валюта и начальный остаток." : "Выберите другой тип счёта или добавьте новый.", icon: archived.wrappedValue ? "archivebox" : "wallet.bifold").beeCard()
             }
             ForEach(FinancialAccountSection.allCases) { section in
                 let accounts = visible.filter { section.includes($0.kind) }
@@ -103,7 +107,7 @@ struct AccountsView: View {
                     } else { LazyVStack(spacing: 0) { ForEach(accounts) { account in FinancialAccountRow(account: account, db: db); if account.id != accounts.last?.id { Divider() } } }.beeCard() }
                 }
             }
-        }.padding(26) } }
+        }.padding(26).background(WorkspaceScrollMemory(route: route)) } }
     } }
     private func historyHeader(_ account: Account, db: Database) -> some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -140,6 +144,7 @@ struct OperationsView: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     var kind: OperationKind?
+    var workspaceRoute: WorkspaceRoute? = nil
     var accountID: UUID?
     var ids: [UUID]?
     var valuationCurrency: String?
@@ -148,17 +153,28 @@ struct OperationsView: View {
     @State private var selected: UUID?
     @State private var editor: SheetRoute?
     @State private var sortOrder = [KeyPathComparator(\OperationTableEntry.date, order: .reverse)]
-    init(kind: OperationKind? = nil, accountID: UUID? = nil, ids: [UUID]? = nil, initialFilters: Filters = Filters(), valuationCurrency: String? = nil) { self.valuationCurrency = valuationCurrency; self.kind = kind; self.accountID = accountID; self.ids = ids; self.initialPeriod = initialFilters; _filters = State(initialValue: initialFilters) }
+    init(kind: OperationKind? = nil, accountID: UUID? = nil, ids: [UUID]? = nil, initialFilters: Filters = Filters(), valuationCurrency: String? = nil, workspaceRoute: WorkspaceRoute? = nil) { self.valuationCurrency = valuationCurrency; self.kind = kind; self.accountID = accountID; self.ids = ids; self.initialPeriod = initialFilters; self.workspaceRoute = workspaceRoute; _filters = State(initialValue: initialFilters) }
     var operations: [BudgetCore.Operation] { guard let db = model.db else { return [] }; var candidate = filters; if let accountID { candidate.accounts = [accountID] }; var rows = Reports.selected(db, filters: candidate, kinds: kind.map { [$0] }, sorted: false); if let ids { let allowed = Set(ids); rows = rows.filter { allowed.contains($0.id) } }; return rows }
     private var tableRows: [OperationTableEntry] { guard let db = model.db else { return [] }; let accounts = Dictionary(uniqueKeysWithValues: db.accounts.map { ($0.id, $0) }); return operations.map { OperationTableEntry(operation: $0, source: accounts[$0.accountID], context: accountID.flatMap { accounts[$0] }) }.sorted(using: sortOrder) }
     private var exportFilters: Filters { var value = filters; if let accountID { value.accounts = [accountID] }; return value }
     var body: some View { if let db = model.db {
+        GeometryReader { geometry in
+            if geometry.size.height < 560 * appearanceStore.preferences.scale {
+                ScrollView {
+                    operationsContent(db).frame(height: max(760 * appearanceStore.preferences.scale, geometry.size.height))
+                        .background { if let workspaceRoute { WorkspaceScrollMemory(route: workspaceRoute) } }
+                }
+            } else { operationsContent(db) }
+        }
+    } }
+    private func operationsContent(_ db: Database) -> some View {
         let reportCurrency = valuationCurrency ?? db.settings.reportCurrency
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeading(title: ids != nil ? "Детализация" : kind == .expense ? "Расходы" : kind == .income ? "Доходы" : "История") {
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionHeading(title: ids != nil ? "Детализация" : workspaceRoute?.section == .operations ? "Журнал операций" : accountID != nil ? (db.accounts.first { $0.id == accountID }?.name ?? "История счёта") : kind == .expense ? "Расходы" : kind == .income ? "Доходы" : "История") {
                 Button("Экспорт…") { model.exportCSV(selection: operations, filters: exportFilters) }
                 if kind == .expense { Button("Запланировать расход") { model.sheet = SheetRoute(kind: .scheduledPayment) } }
-                if let kind { Button(kind == .expense ? "Добавить расход" : "Добавить доход", systemImage: "plus") { model.newOperation(kind) }.buttonStyle(BeePrimaryStyle()) }
+                if let kind, kind.isFlow { Button(kind == .expense ? "Добавить расход" : "Добавить доход", systemImage: "plus") { model.newOperation(kind) }.buttonStyle(BeePrimaryStyle()) }
+                else if workspaceRoute?.section == .operations { Menu("Добавить", systemImage: "plus") { Button("Расход") { model.newOperation(.expense) }; Button("Доход") { model.newOperation(.income) }; Button("Перевод") { model.newOperation(.transfer) } } }
             }
             FilterBar(filters: $filters, showParticipation: kind != .income, kind: kind, fixedAccount: accountID, operationIDs: ids, resetPeriod: initialPeriod)
             HStack { TextField("Поиск по комментарию", text: $filters.search).textFieldStyle(BeeTextFieldStyle()); Text("\(operations.count) записей").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted) }
@@ -181,6 +197,7 @@ struct OperationsView: View {
                 }.scrollContentBackground(.hidden).foregroundStyle(BeeStyle.text)
                     .contextMenu(forSelectionType: UUID.self) { selection in if let id = selection.first { Button("Изменить") { edit(id) }; ForEach((db.financeData.scheduledPayments ?? []).filter { $0.allocations.contains { $0.operationID == id } }) { p in Button("План: " + p.title) { openScheduled(p.id) } }; Button("Удалить", role: .destructive) { remove(id) } } } primaryAction: { selection in if let id = selection.first { edit(id) } }
                 .frame(minHeight: 180, maxHeight: .infinity)
+                .background { if let workspaceRoute { WorkspaceScrollMemory(route: workspaceRoute, table: true) } }
                 .background(BeeStyle.surface, in: RoundedRectangle(cornerRadius: 12))
             }
             ViewThatFits(in: .horizontal) {
@@ -188,7 +205,10 @@ struct OperationsView: View {
                 VStack(alignment: .leading, spacing: 10) { tableHint; HStack { Spacer(); selectionActions } }
             }
         }.padding(24).sheet(item: $editor) { route in OperationEditor(id: route.entityID, kind: route.operationKind) }
-    } }
+        .onAppear { if let workspaceRoute { let memory = model.navigation.context(for: workspaceRoute); filters = memory.filters; selected = memory.selectedID; if let id = selected, !operations.contains(where: { $0.id == id }) { selected = nil } } }
+        .onChange(of: filters) { _, value in if let workspaceRoute { model.updateWorkspaceContext(workspaceRoute) { $0.filters = value } } }
+        .onChange(of: selected) { _, value in if let workspaceRoute { model.updateWorkspaceContext(workspaceRoute) { $0.selectedID = value } } }
+    }
     private var tableHint: some View { Text("Переводы и корректировки не входят в доходы и расходы.").beeFont(.caption).foregroundStyle(BeeStyle.backgroundMuted).fixedSize(horizontal: false, vertical: true) }
     private var selectionActions: some View { HStack { Button("Изменить") { if let selected { edit(selected) } }.disabled(selected == nil); Button("Удалить", role: .destructive) { if let selected { remove(selected) } }.disabled(selected == nil) } }
     private func openScheduled(_ id: UUID) { model.sheet = nil; model.drilldown = nil; DispatchQueue.main.async { model.sheet = SheetRoute(kind: .scheduledDetail, entityID: id) } }
@@ -199,17 +219,18 @@ struct OperationsView: View {
 struct ReferencesView: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
-    @State private var tab = 0
-    @State private var archived = false
-    @State private var search = ""
+    private let route = WorkspaceRoute(.operations, operations: .references)
+    private var tab: Binding<Int> { Binding(get: { model.navigation.context(for: route).referencePage }, set: { value in model.updateWorkspaceContext(route) { $0.referencePage = value } }) }
+    private var archived: Binding<Bool> { Binding(get: { model.navigation.context(for: route).archived }, set: { value in model.updateWorkspaceContext(route) { $0.archived = value } }) }
+    private var search: Binding<String> { Binding(get: { model.navigation.context(for: route).search }, set: { value in model.updateWorkspaceContext(route) { $0.search = value } }) }
     var body: some View { if let db = model.db { ScrollView { VStack(alignment: .leading, spacing: 18) {
-        SectionHeading(title: "Справочники") { Button(tab == 3 ? "Новый банк" : tab == 2 ? "Новый проект" : "Новая категория", systemImage: "plus") { model.sheet = SheetRoute(kind: tab == 3 ? .bank : tab == 2 ? .project : .category, operationKind: tab == 1 ? .income : .expense) }.buttonStyle(BeePrimaryStyle()) }
-        BeePicker("Раздел", selection: $tab) { Text("Категории расходов").tag(0); Text("Категории доходов").tag(1); Text("Проекты").tag(2); Text("Банки").tag(3) }.beePickerStyle(.segmented)
-        HStack { TextField("Поиск", text: $search).textFieldStyle(BeeTextFieldStyle()); Toggle("Архив", isOn: $archived).toggleStyle(.checkbox) }
+        SectionHeading(title: "Справочники") { if tab.wrappedValue != 2 { Button(tab.wrappedValue == 3 ? "Новый банк" : "Новая категория", systemImage: "plus") { model.sheet = SheetRoute(kind: tab.wrappedValue == 3 ? .bank : .category, operationKind: tab.wrappedValue == 1 ? .income : .expense) }.buttonStyle(BeePrimaryStyle()) } }
+        BeePicker("Раздел", selection: tab) { Text("Категории расходов").tag(0); Text("Категории доходов").tag(1); Text("Проекты").tag(2); Text("Банки").tag(3) }.beePickerStyle(.segmented)
+        HStack { TextField("Поиск", text: search).textFieldStyle(BeeTextFieldStyle()); Toggle("Архив", isOn: archived).toggleStyle(.checkbox) }
         VStack(alignment: .leading, spacing: 0) {
-            if tab == 3 { BankReferenceList(search: search, archived: archived) }
-            else if tab == 2 { if db.projects.isEmpty { EmptyState(title: "Проектов пока нет", detail: "Добавьте проект для отдельного учёта расходов.") }; ForEach(db.projects.filter { (archived || !$0.archived) && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) }) { project in HStack { VStack(alignment: .leading, spacing: 4) { Text(project.name + (project.archived ? " · архив" : "")).beeFont(.headline); if !project.description.isEmpty { Text(project.description).beeFont(.caption).foregroundStyle(BeeStyle.muted) } }; Spacer(); Menu { Button("Изменить") { model.sheet = SheetRoute(kind: .project, entityID: project.id) }; Button(project.archived ? "Вернуть" : "Архивировать") { model.perform { db in var copy = project; copy.archived.toggle(); try Ledger.saveProject(copy, in: &db) } }; Button("Удалить", role: .destructive) { if confirmDeletion(project.name, consequence: "Проект со ссылками можно только архивировать.") { model.perform { try Ledger.deleteProject(project.id, in: &$0) } } } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 28) }.padding(.vertical, 14); Divider() } }
-            else { ForEach(db.categories.filter { $0.kind == (tab == 0 ? .expense : .income) && (archived || !$0.archived) && (search.isEmpty || db.categoryPath($0.id).localizedCaseInsensitiveContains(search)) }.sorted { db.categoryPath($0.id) < db.categoryPath($1.id) }) { category in HStack { Image(systemName: category.parentID == nil ? "folder" : "arrow.turn.down.right").foregroundStyle(BeeStyle.muted); Text(category.name + (category.archived ? " · архив" : "")).beeFont(category.parentID == nil ? .headline : .body); Spacer(); if !category.system { Menu { Button("Изменить") { model.sheet = SheetRoute(kind: .category, entityID: category.id) }; Button(category.archived ? "Вернуть" : "Архивировать") { model.perform { db in var copy = category; copy.archived.toggle(); try Ledger.saveCategory(copy, in: &db) } }; Button("Удалить", role: .destructive) { if confirmDeletion(category.name, consequence: "Использованную категорию можно только архивировать.") { model.perform { try Ledger.deleteCategory(category.id, in: &$0) } } } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 28) } }.padding(.vertical, 14).padding(.leading, category.parentID == nil ? 0 : 20); Divider() } }
+            if tab.wrappedValue == 3 { BankReferenceList(search: search.wrappedValue, archived: archived.wrappedValue) }
+            else if tab.wrappedValue == 2 { VStack(alignment: .leading, spacing: 12) { Text("Управление проектами находится в отдельном разделе."); Button("Открыть проекты", systemImage: "flag") { model.navigate(WorkspaceRoute(.projects)) }.buttonStyle(BeePrimaryStyle()) } }
+            else { ForEach(db.categories.filter { $0.kind == (tab.wrappedValue == 0 ? .expense : .income) && (archived.wrappedValue || !$0.archived) && (search.wrappedValue.isEmpty || db.categoryPath($0.id).localizedCaseInsensitiveContains(search.wrappedValue)) }.sorted { db.categoryPath($0.id) < db.categoryPath($1.id) }) { category in HStack { Image(systemName: category.parentID == nil ? "folder" : "arrow.turn.down.right").foregroundStyle(BeeStyle.muted); Text(category.name + (category.archived ? " · архив" : "")).beeFont(category.parentID == nil ? .headline : .body); Spacer(); if !category.system { Menu { Button("Изменить") { model.sheet = SheetRoute(kind: .category, entityID: category.id) }; Button(category.archived ? "Вернуть" : "Архивировать") { model.perform { db in var copy = category; copy.archived.toggle(); try Ledger.saveCategory(copy, in: &db) } }; Button("Удалить", role: .destructive) { if confirmDeletion(category.name, consequence: "Использованную категорию можно только архивировать.") { model.perform { try Ledger.deleteCategory(category.id, in: &$0) } } } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 28) } }.padding(.vertical, 14).padding(.leading, category.parentID == nil ? 0 : 20); Divider() } }
         }.beeCard()
-    }.padding(26) } } }
+    }.padding(26).background(WorkspaceScrollMemory(route: route)) } } }
 }

@@ -18,6 +18,7 @@ struct ScheduledPaymentsView: View {
     @State private var search = ""
     @State private var status = "Предстоящие"
     @State private var from = ""; @State private var through = ""
+    private let route = WorkspaceRoute(.plan, calendar: .scheduled)
     private func rows(_ db: Database, now: Date) -> [ScheduledPayment] {
         (db.financeData.scheduledPayments ?? []).filter { p in
             let state = try? ScheduledPayments.state(p, db: db, now: now)
@@ -39,8 +40,14 @@ struct ScheduledPaymentsView: View {
                 ScheduledTotals(payments: selected)
                 ForEach(selected) { ScheduledPaymentCard(payment: $0, now: clock.date) }
                 if selected.isEmpty { EmptyState(title: "Нет запланированных платежей", detail: "Создайте разовую оплату или график рассрочки.").beeCard() }
-            }.padding(24) } }
+            }.padding(24).background(WorkspaceScrollMemory(route: route)) } }
+        }.onAppear {
+            let memory = model.navigation.context(for: route); search = memory.search; status = memory.scheduledStatus; from = memory.scheduledFrom; through = memory.scheduledThrough
         }
+        .onChange(of: search) { _, value in model.updateWorkspaceContext(route) { $0.search = value } }
+        .onChange(of: status) { _, value in model.updateWorkspaceContext(route) { $0.scheduledStatus = value } }
+        .onChange(of: from) { _, value in model.updateWorkspaceContext(route) { $0.scheduledFrom = value } }
+        .onChange(of: through) { _, value in model.updateWorkspaceContext(route) { $0.scheduledThrough = value } }
     }
     private var searchField: some View { TextField("Название, комментарий или договор", text: $search).textFieldStyle(BeeTextFieldStyle()).frame(minWidth: 220) }
     private var statusPicker: some View { BeePicker("Состояние", selection: $status) { Text("Предстоящие").tag("Предстоящие"); ForEach(ScheduledPaymentState.allCases, id: \.self) { Text($0.title).tag($0.title) }; Text("Все").tag("Все"); Text("Архив").tag("Архив") } }
@@ -83,6 +90,12 @@ struct ScheduledPaymentDetail: View {
     @State private var action: ScheduledAction?
     var body: some View {
         if let db = model.db, let p = db.financeData.scheduledPayments?.first(where: { $0.id == id }) {
+            if let action {
+                switch action {
+                case .edit: ScheduledPaymentEditor(id: p.id)
+                case .pay: ScheduledPaymentPayEditor(id: p.id)
+                }
+            } else {
             VStack(alignment: .leading, spacing: 16) {
                 HStack { Text(p.title).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() }.keyboardShortcut(.cancelAction) }
                 ScrollView { VStack(alignment: .leading, spacing: 14) {
@@ -94,7 +107,7 @@ struct ScheduledPaymentDetail: View {
                     if !p.payee.isEmpty { Text("Получатель: " + p.payee) }; if !p.contractReference.isEmpty { Text("Договор: " + p.contractReference) }
                     if let external = try? ProjectEngine.externalPaid(paymentID:p.id,db:db),external > 0 {
                         Text("Оплачено участниками проекта напрямую: " + BeeFormat.money(external,currency:p.currency)).beeFont(.caption).foregroundStyle(BeeStyle.muted)
-                        if let project = db.projects.first(where:{ $0.details?.costs.contains(where:{ $0.scheduledPaymentID == p.id }) == true }) { Button("Открыть основание в проекте") { model.planningProjectID = project.id; model.section = .projects; dismiss() } }
+                        if let project = db.projects.first(where:{ $0.details?.costs.contains(where:{ $0.scheduledPaymentID == p.id }) == true }) { Button("Открыть основание в проекте") { model.sheet = nil; dismiss(); model.navigate(WorkspaceRoute(.projects, project: .costs, objectID: project.id)) } }
                     }
                     Divider(); Text("Напоминания").beeFont(.headline)
                     if p.cancelled || p.archived || (try? ScheduledPayments.remaining(p, db: db)) == 0 { Text("Платёж закрыт: будущие системные напоминания по нему не планируются.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
@@ -114,7 +127,8 @@ struct ScheduledPaymentDetail: View {
                     if p.cancelled || (try? ScheduledPayments.remaining(p, db: db)) == 0 { Button(p.archived ? "Из архива" : "В архив") { var copy = p; copy.archived.toggle(); model.perform { try ScheduledPayments.save(copy, in: &$0) } } }
                     Spacer(); Button("Изменить / перенести") { action = .edit }; Button("Оплатить") { action = .pay }.buttonStyle(BeePrimaryStyle()).disabled(p.cancelled || p.archived || (try? ScheduledPayments.remaining(p, db: db)) == 0)
                 }
-            }.padding(24).beeSheet(width: 740, height: 620).beeWindow().sheet(item: $action) { item in switch item { case .edit: ScheduledPaymentEditor(id: p.id); case .pay: ScheduledPaymentPayEditor(id: p.id) } }
+            }.padding(24).beeSheet(width: 740, height: 620).beeWindow()
+            }
         } else { EmptyState(title: "Платёж недоступен", detail: "Он удалён или относится к другой базе.").padding(24) }
     }
 }
@@ -224,7 +238,7 @@ struct ScheduledPaymentPayEditor: View {
                 Text(p.title).beeFont(.headline); Text(p.comment).foregroundStyle(BeeStyle.muted)
                 Text("Осталось: " + BeeFormat.money((try? ScheduledPayments.remaining(p, db: db)) ?? p.amount, currency: p.currency))
                 Toggle("Связать существующий расход", isOn: $existing).toggleStyle(.checkbox)
-                if existing { BeePicker("Расход", selection: $operationID) { Text("Выберите расход").tag(nil as UUID?); ForEach(db.operations.filter { $0.kind == .expense }.sorted { $0.date > $1.date }) { o in Text(o.date.rawValue + " · " + Money.display(o.amount, currency: (try? db.account(o.accountID).currency) ?? p.currency) + " · " + o.comment).tag(Optional(o.id)) } } }
+                if existing { BeePicker("Расход", selection: $operationID) { Text("Выберите расход").tag(nil as UUID?); ForEach(db.operations.filter { operation in operation.kind == .expense && !p.allocations.contains { $0.operationID == operation.id } }.sorted { $0.date > $1.date }) { o in Text(o.date.rawValue + " · " + Money.display(o.amount, currency: (try? db.account(o.accountID).currency) ?? p.currency) + " · " + o.comment).tag(Optional(o.id)) } } }
                 else { BeePicker("Счёт списания", selection: $accountID) { Text("Выберите счёт").tag(nil as UUID?); ForEach(db.accounts.filter { !$0.archived }) { Text($0.name + " · " + $0.currency).tag(Optional($0.id)) } }; DayField(title: "Дата фактической оплаты", value: $date) }
                 FormField(title: "Сумма оплаты / доля расхода · \(source?.currency ?? p.currency)") { TextField("0", text: $amount).textFieldStyle(BeeTextFieldStyle()) }
                 if let source, source.currency != p.currency { FormField(title: "Фактически погашено обязательство · \(p.currency)", hint: "Обе суммы обязательны. Курс сохраняется по фактической оплате.") { TextField("0", text: $received).textFieldStyle(BeeTextFieldStyle()) } }
@@ -241,6 +255,6 @@ struct ScheduledDashboardSummary: View {
     @EnvironmentObject var model: AppModel
     var body: some View { if let db = model.db {
         let payments = (db.financeData.scheduledPayments ?? []).filter { !$0.cancelled && !$0.archived && ((try? ScheduledPayments.remaining($0, db: db)) ?? 0) > 0 }.sorted { $0.dueOn < $1.dueOn }
-        if !payments.isEmpty { VStack(alignment: .leading, spacing: 12) { HStack { Text("Предстоящие расходы").beeFont(.headline); Spacer(); Button("Все планы") { model.section = .expenses; model.showScheduledExpenses = true } }; ForEach(Array(payments.prefix(3))) { p in Button { model.sheet = SheetRoute(kind: .scheduledDetail, entityID: p.id) } label: { HStack { Text(CalendarDays.label(p.dueOn)); Text(p.title).lineLimit(1); Spacer(); Text(BeeFormat.money((try? ScheduledPayments.remaining(p, db: db)) ?? p.amount, currency: p.currency)) } }.buttonStyle(BeeRowStyle()) }; Text("Плановые суммы учитываются отдельно от фактических расходов и кредитного долга.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }.beeCard() }
+        if !payments.isEmpty { VStack(alignment: .leading, spacing: 12) { HStack { Text("Предстоящие расходы").beeFont(.headline); Spacer(); Button("Все планы") { model.openPlannedPayments() } }; ForEach(Array(payments.prefix(3))) { p in Button { model.sheet = SheetRoute(kind: .scheduledDetail, entityID: p.id) } label: { HStack { Text(CalendarDays.label(p.dueOn)); Text(p.title).lineLimit(1); Spacer(); Text(BeeFormat.money((try? ScheduledPayments.remaining(p, db: db)) ?? p.amount, currency: p.currency)) } }.buttonStyle(BeeRowStyle()) }; Text("Плановые суммы учитываются отдельно от фактических расходов и кредитного долга.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }.beeCard() }
     } }
 }

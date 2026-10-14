@@ -75,12 +75,13 @@ struct EditorFrame<Content: View>: View {
                 if isDirty { Text("При блокировке незавершённая форма закроется.").beeFont(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true) }
                 HStack {
                 Spacer()
-                Button("Отмена") { if isDirty { discard = true } else { dismiss() } }.keyboardShortcut(.cancelAction)
+                Button("Отмена", action: requestClose).keyboardShortcut(.cancelAction)
                 Button(saveTitle, action: submit).buttonStyle(BeePrimaryStyle()).keyboardShortcut(.defaultAction).disabled(!canSave || model.busy || submitting)
                 }
             }.padding(20)
         }.beeSheet(width: width, height: height).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).tint(tintColor).beeAppearance()
             .interactiveDismissDisabled(isDirty)
+            .background(EditorEscapeGuard(onEscape: requestClose))
             .modifier(UpdateFormGuard(active: true))
             .onDisappear { submitTask?.cancel() }
             .confirmationDialog("Сохранить изменения перед закрытием?", isPresented: $discard) {
@@ -89,6 +90,7 @@ struct EditorFrame<Content: View>: View {
                 Button("Продолжить редактирование", role: .cancel) {}
             }
     }
+    private func requestClose() { if isDirty { discard = true } else { dismiss() } }
     private func submit() {
         guard !submitting else { return }
         if let saveAsync { submitting = true; submitTask = Task { do { try await saveAsync(); try Task.checkCancellation(); submitting = false; dismiss() } catch { submitting = false; self.error = error.localizedDescription; onError(self.error) } } }

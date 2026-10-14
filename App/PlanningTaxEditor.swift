@@ -38,12 +38,12 @@ struct TaxProfileEditor: View {
         }
         FinanceChoice(title:"Стадия возмещения",value:$profile.stage,titleOf:{ $0.title })
         Toggle("Задать предполагаемый срок выплаты / возврата",isOn:$hasDate); if hasDate { PlanningDateField(title:"Предполагаемая дата",day:$date) }
-        if let db = model.db { BeePicker("Связать факт возврата",selection:$profile.refundOperationID) { Text("Возврат ещё не поступил").tag(nil as UUID?); ForEach(db.operations.filter { $0.kind == .income }) { Text("\($0.date) · \($0.comment)").tag(Optional($0.id)) } } }
+        if let db = model.db { BeePicker("Связать факт возврата",selection:$profile.refundOperationID) { Text("Возврат ещё не поступил").tag(nil as UUID?); ForEach(db.operations.filter { $0.kind == .income }) { Text("\($0.date.rawValue) · \($0.comment)").tag(Optional($0.id)) } } }
         Button("Рассчитать") { calculate() }.buttonStyle(BeePrimaryStyle())
         if let result {
             if result.complete { Text("НДФЛ после вычетов: " + BeeFormat.money(result.tax ?? 0,currency:"RUB")).beeFont(.headline); Text("К доплате: " + BeeFormat.money(result.payable ?? 0,currency:"RUB")); Text("Возможный возврат: " + BeeFormat.money(result.refund ?? 0,currency:"RUB")).foregroundStyle(BeeStyle.positive); Text("База вычетов: социальный \(BeeFormat.money(result.socialBase,currency:"RUB")), жильё \(BeeFormat.money(result.housingBase,currency:"RUB")), проценты \(BeeFormat.money(result.interestBase,currency:"RUB"))").beeFont(.caption) }
             else { Text("Расчёт неполный: " + result.missing.joined(separator:"; ")).foregroundStyle(BeeStyle.warning) }
-            if let rules = result.rules { Text("\(rules.version) · проверка источников \(rules.checkedOn)").beeFont(.caption).foregroundStyle(BeeStyle.muted); ForEach(rules.sources,id:\.self) { url in if let url = URL(string:url) { Link("Источник ФНС",destination:url).beeFont(.caption) } } }
+            if let rules = result.rules { Text("\(rules.version) · проверка источников \(rules.checkedOn.rawValue)").beeFont(.caption).foregroundStyle(BeeStyle.muted); ForEach(rules.sources,id:\.self) { url in if let url = URL(string:url) { Link("Источник ФНС",destination:url).beeFont(.caption) } } }
         }
         if let db = model.db {
             let saved = db.planningData.taxResults.filter { $0.profileID == profile.id }.sorted { $0.date > $1.date }

@@ -20,6 +20,15 @@ import BudgetPresentation
             .commands {
                 AppUpdateCommands(updater: updater)
                 BeeSectionCommands()
+                CommandMenu("Переход") {
+                    ForEach(Array(SectionID.allCases.enumerated()), id: \.element.id) { index, section in
+                        Button(section.rawValue) { model.section = section }.keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
+                            .disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending || !model.updateForms.isEmpty || model.sheet != nil)
+                    }
+                    Divider()
+                    Button("Назад") { model.navigateBack() }.keyboardShortcut("[")
+                        .disabled(model.db == nil || !model.navigation.canGoBack || model.updateFrozen || model.updateVerificationPending || !model.updateForms.isEmpty || model.sheet != nil)
+                }
                 CommandGroup(after: .newItem) {
                     Button("Новый расход") { model.newOperation(.expense) }.keyboardShortcut("n").disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending)
                     Button("Новый доход") { model.newOperation(.income) }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(model.db == nil || model.updateFrozen || model.updateVerificationPending)
@@ -78,7 +87,7 @@ struct RootView: View {
         #endif
         .sheet(item: Binding(get: { active ? model.sheet : nil }, set: { model.sheet = $0 })) { route in
             switch route.kind {
-            case .planFlow: PlanFlowEditor(id: route.entityID)
+            case .planFlow: PlanFlowEditor(id: route.entityID, initialPurpose: route.planPurpose)
             case .savingsGoal: SavingsGoalEditor(id: route.entityID)
             case .taxProfile: TaxProfileEditor(id: route.entityID)
             case .eventSettings: PlanningEventSettingsEditor()

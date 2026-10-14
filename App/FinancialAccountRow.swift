@@ -16,7 +16,12 @@ struct FinancialAccountRow: View {
     var account: Account
     var db: Database
     var body: some View {
-        let balance = (try? db.balance(account.id)) ?? 0
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 14) { accountDescription; Spacer(minLength: 12); balanceActions; accountMenu }
+            VStack(alignment: .leading, spacing: 14) { accountDescription; HStack(alignment: .top) { balanceActions; Spacer(); accountMenu } }
+        }.padding(.vertical, 14).tint(BeeStyle.text)
+    }
+    private var accountDescription: some View {
         HStack(alignment: .top, spacing: 14) {
             BankMark(bankID: account.bankID, fallback: account.archived ? "archivebox" : account.kind.icon).frame(width: 34).padding(.top, 3)
             VStack(alignment: .leading, spacing: 6) {
@@ -25,11 +30,17 @@ struct FinancialAccountRow: View {
                 if let bank = db.financialBankName(account.bankID) { Text(bank).beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                 ForEach(summary, id: \.self) { Text($0).beeFont(.caption).foregroundStyle(BeeStyle.muted).fixedSize(horizontal: false, vertical: true) }
             }
-            Spacer(minLength: 12)
-            VStack(alignment: .trailing, spacing: 8) {
+        }.fixedSize(horizontal: false, vertical: true)
+    }
+    private var balanceActions: some View {
+        let balance = (try? db.balance(account.id)) ?? 0
+        return VStack(alignment: .trailing, spacing: 8) {
                 Text((account.kind.isDebt && balance < 0 ? "Долг: " : "") + BeeFormat.money(account.kind.isDebt && balance < 0 ? -balance : balance, currency: account.currency)).beeFont(.title3).monospacedDigit().foregroundStyle(balance < 0 ? BeeStyle.negative : BeeStyle.text)
                 Button("История", systemImage: "chevron.right") { model.openHistory(account.id) }
-            }
+                Button("Сверить остаток") { model.sheet = SheetRoute(kind: .reconciliation, entityID: account.id) }.disabled(account.archived)
+            }.fixedSize(horizontal: true, vertical: true)
+    }
+    private var accountMenu: some View {
             Menu {
                 Button("Изменить") { model.sheet = SheetRoute(kind: .account, entityID: account.id) }
                 Button("Сверить остаток") { model.sheet = SheetRoute(kind: .reconciliation, entityID: account.id) }.disabled(account.archived)
@@ -38,7 +49,6 @@ struct FinancialAccountRow: View {
                 }
                 Button("Удалить", role: .destructive) { if confirmDeletion(account.name, consequence: "Удаляется пустой счёт без ссылок. Для счёта с историей используйте архив.") { model.perform { try Ledger.deleteAccount(account.id, in: &$0) } } }
             } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 28)
-        }.padding(.vertical, 14).tint(BeeStyle.text)
     }
     private var summary: [String] {
         guard let contract = db.contract(for: account.id) else { return [] }

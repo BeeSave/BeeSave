@@ -37,12 +37,12 @@ struct DashboardView: View {
     }
     var body: some View { if let db = model.db { ScrollView {
         VStack(alignment: .leading, spacing: 22) {
-            SectionHeading(title: model.showGettingStarted ? "Начнём учёт" : "Главная") {
+            SectionHeading(title: model.showGettingStarted ? "Начнём учёт" : "Обзор") {
                 if !db.accounts.isEmpty && !model.showGettingStarted {
                 Button("Планировать бюджет", systemImage: "chart.xyaxis.line") { model.section = .planning }.buttonStyle(BeePrimaryStyle())
                 Menu { Button("Добавить расход") { model.newOperation(.expense) }; Button("Добавить доход") { model.newOperation(.income) }; Button("Перевести между счетами") { model.newOperation(.transfer) } } label: { Image(systemName: "chevron.down") }.menuIndicator(.hidden)
                 Menu("Отчёты") { ForEach(db.reports) { report in Button(report.name) { model.sheet = SheetRoute(kind: .reportView, entityID: report.id) } }; Divider(); Button("Создать отчёт…") { model.sheet = SheetRoute(kind: .report) } }
-                Button("Настроить", systemImage: "rectangle.3.group") { model.sheet = SheetRoute(kind: .layout) }
+                Button("Настроить обзор", systemImage: "rectangle.3.group") { model.sheet = SheetRoute(kind: .layout) }
                 }
             }
             if !db.accounts.isEmpty && !model.showGettingStarted {
@@ -58,10 +58,17 @@ struct DashboardView: View {
                     }
                 }
             } else { DashboardExchangeRates() }
+            if availableWidth >= 900 * appearance.scale {
+                HStack(alignment: .top, spacing: 18) {
+                    PlanningLiquiditySummary().frame(maxWidth: .infinity)
+                    OverviewProjectsCard().frame(maxWidth: .infinity)
+                }
+            } else { PlanningLiquiditySummary(); OverviewProjectsCard() }
+            if availableWidth >= 900 * appearance.scale {
+                HStack(alignment: .top, spacing: 18) { UpcomingPaymentsCard(limit: 3).frame(maxWidth: .infinity); UpcomingAttentionCard(limit: 3).frame(maxWidth: .infinity) }
+            } else { VStack(spacing: 18) { UpcomingPaymentsCard(limit: 3); UpcomingAttentionCard(limit: 3) } }
+            if let trend = db.dashboard.first(where: { $0.kind == "trend" && $0.visible }) { DashboardBlockView(block: trend) }
             FinancialDashboardSummary()
-            UpcomingPaymentsCard()
-            UpcomingAttentionCard()
-            PlanningLiquiditySummary()
             if db.accounts.isEmpty || model.showGettingStarted {
                 VStack(alignment: .leading, spacing: 18) {
                     Image(systemName: "wallet.bifold").beeFont(.system(size: 32)).foregroundStyle(BeeStyle.expense)
@@ -73,11 +80,14 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 16) { Text("Спланируйте регулярный бюджет").beeFont(.title2.bold()); Text("Укажите доход, стоимость жизни и обязательства. Подробный список покупок необязателен.").foregroundStyle(BeeStyle.muted); HStack { Button("Начать планирование") { model.section = .planning }.buttonStyle(BeePrimaryStyle()); Button("Добавить доход") { model.newOperation(.income) } } }.frame(maxWidth: .infinity, alignment: .leading).beeCard()
             } else {
                 Grid(horizontalSpacing: 18, verticalSpacing: 18) {
-                    ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in GridRow(alignment: .top) { ForEach(row) { block in DashboardBlockView(block: block).frame(maxWidth: .infinity, alignment: .topLeading).gridCellColumns(6 / row.count) } } }
+                    ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in
+                        let remaining = row.filter { $0.kind != "trend" }
+                        if !remaining.isEmpty { GridRow(alignment: .top) { ForEach(remaining) { block in DashboardBlockView(block: block).frame(maxWidth: .infinity, alignment: .topLeading).gridCellColumns(6 / remaining.count) } } }
+                    }
                 }
                 if Reports.selected(db, filters: db.settings.dashboardFilters, kinds: [.income, .expense]).isEmpty { HStack { Text("В этой выборке нет потоковых операций."); Spacer(); Button("Сбросить фильтры") { filters.wrappedValue = .month } }.beeCard() }
             }
-        }.padding(26)
+        }.padding(26).background(WorkspaceScrollMemory(route: WorkspaceRoute(.overview)))
     }.onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 } } }
 }
 
@@ -184,7 +194,7 @@ struct LayoutEditor: View {
     @State private var loaded = false
     @State private var resetting = false
     var body: some View {
-        EditorFrame(title: "Настроить Главную", saveTitle: "Готово", isDirty: blocks != original, width: 720, height: 650, save: { try model.commit { $0.dashboard = blocks } }) {
+        EditorFrame(title: "Настроить обзор", saveTitle: "Готово", isDirty: blocks != original, width: 720, height: 650, save: { try model.commit { $0.dashboard = blocks } }) {
             Text("Переместите блоки, выберите размер и скройте лишнее.").foregroundStyle(BeeStyle.muted)
             ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
                 VStack(alignment: .leading, spacing: 10) {

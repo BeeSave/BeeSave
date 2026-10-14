@@ -19,14 +19,14 @@ struct PlanningDateField: View {
     var body: some View { DatePicker(title,selection:Binding(get:{ day.date },set:{ day = Day.utc($0) }),displayedComponents:.date).environment(\.timeZone,TimeZone(secondsFromGMT:0)!) }
 }
 struct PlanFlowEditor: View {
-    @EnvironmentObject var model: AppModel; var id: UUID?
+    @EnvironmentObject var model: AppModel; var id: UUID?; var initialPurpose: PlanPurpose? = nil
     @State private var flow = PlanFlow(title:"",purpose:.payment,amount:0,currency:"RUB",start:.today)
     @State private var amount: Int64 = 0; @State private var unknown = false; @State private var hasEnd = false; @State private var end = Day.today.adding(365)
     @State private var loaded = false; @State private var original: Data?; @State private var planningRevision: UInt64?
     @State private var exception = PlanException(anchor:.today); @State private var exceptionAmount: Int64 = 0; @State private var exceptionOverride = false
     private var dirty: Bool { loaded && ((try? JSONEncoder().encode(flow)) != original || amount != (flow.amount ?? 0) || unknown != (flow.amount == nil) || hasEnd != (flow.end != nil) || (hasEnd && end != flow.end)) }
     var body: some View {
-        EditorFrame(title:id == nil ? "Новый плановый поток" : "Плановый поток",isDirty:dirty,height:740,save:save) {
+        EditorFrame(title:id == nil ? "Добавить в регулярный план" : "Регулярный план",isDirty:dirty,height:740,save:save) {
             FormField(title:"Название") { TextField("ЖКХ, зарплата, жизнь…",text:$flow.title).textFieldStyle(BeeTextFieldStyle()) }
             FinanceChoice(title:"Назначение",value:$flow.purpose,titleOf:{ $0.title })
             CurrencyPicker(title:"Валюта",selection:$flow.currency)
@@ -41,11 +41,13 @@ struct PlanFlowEditor: View {
             }
             FinanceChoice(title:"Достоверность",value:$flow.certainty,titleOf:{ $0.title })
             Toggle("Входит в мой личный денежный план",isOn:Binding(get:{ flow.personalImpact != false },set:{ flow.personalImpact = $0 }))
+            DisclosureGroup("Счёт, категория и проект") {
             if let db = model.db {
                 FormField(title:"Предполагаемый счёт") { BeePicker("Счёт",selection:$flow.accountID) { Text("При оплате").tag(nil as UUID?); ForEach(db.accounts.filter { !$0.archived && $0.kind == .ordinary && $0.currency == flow.currency }) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
                 FormField(title:"Категория") { BeePicker("Категория",selection:$flow.categoryID) { Text("Без категории").tag(nil as UUID?); ForEach(db.categories.filter { !$0.archived && $0.kind == (flow.purpose == .income ? .income : .expense) }) { Text(db.categoryPath($0.id)).tag(Optional($0.id)) } }.labelsHidden() }
                 if flow.purpose != .income && flow.frequency == .monthly { BeePicker("Входит в общий лимит жизни",selection:$flow.parentFlowID) { Text("Отдельная сумма").tag(nil as UUID?); ForEach(db.planningData.flows.filter { $0.id != flow.id && $0.purpose == .living && $0.frequency == .monthly && $0.parentFlowID == nil && $0.currency == flow.currency }) { Text($0.title).tag(Optional($0.id)) } } }
                 FormField(title:"Проект") { BeePicker("Проект",selection:$flow.projectID) { Text("Без проекта").tag(nil as UUID?); ForEach(db.projects.filter { !$0.archived }) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden() }
+            }
             }
             FormField(title:"Основание / комментарий") { TextField("Условия плана",text:$flow.comment).textFieldStyle(BeeTextFieldStyle()) }
             Toggle("Учитывать будущие вхождения",isOn:$flow.enabled)
@@ -58,10 +60,10 @@ struct PlanFlowEditor: View {
                 Toggle("Отменить это вхождение",isOn:$exception.cancelled)
                 if flow.purpose == .living { Toggle("Период закрыт, дальнейших трат не будет",isOn:$exception.closed) }
                 Button("Добавить / изменить исключение") { exception.amount = exceptionOverride ? exceptionAmount : nil; flow.exceptions.removeAll { $0.anchor == exception.anchor }; flow.exceptions.append(exception) }
-                ForEach(flow.exceptions,id:\.anchor) { e in Text("\(e.anchor): \(e.cancelled ? "отменено" : e.closed ? "период закрыт" : "исключение")").beeFont(.caption) }
+                ForEach(flow.exceptions,id:\.anchor) { e in Text("\(e.anchor.rawValue): \(e.cancelled ? "отменено" : e.closed ? "период закрыт" : "исключение")").beeFont(.caption) }
                 Text("Для изменения всей серии сохраните новые условия. Уже учтённые факты сохраняются.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             }
-        }.onAppear { guard !loaded else { return }; planningRevision = model.db?.revision ?? 0; if let saved = model.db?.planningData.flows.first(where:{ $0.id == id }) { flow = saved }; amount = flow.amount ?? 0; unknown = flow.amount == nil; hasEnd = flow.end != nil; end = flow.end ?? end; original = try? JSONEncoder().encode(flow); loaded = true }
+        }.onAppear { guard !loaded else { return }; planningRevision = model.db?.revision ?? 0; if let saved = model.db?.planningData.flows.first(where:{ $0.id == id }) { flow = saved } else { flow.currency = model.db?.settings.baseCurrency ?? "RUB"; if let initialPurpose { flow.purpose = initialPurpose } }; amount = flow.amount ?? 0; unknown = flow.amount == nil; hasEnd = flow.end != nil; end = flow.end ?? end; original = try? JSONEncoder().encode(flow); loaded = true }
         .onChange(of:flow.purpose) { _,_ in if let categoryID = flow.categoryID,model.db?.categories.first(where:{ $0.id == categoryID })?.kind != (flow.purpose == .income ? .income : .expense) { flow.categoryID = nil }; if flow.purpose == .income { flow.parentFlowID = nil } }
         .onChange(of:flow.frequency) { _,_ in if flow.frequency != .monthly { flow.parentFlowID = nil } }
         .onChange(of:flow.currency) { _,v in if let accountID = flow.accountID,model.db?.accounts.first(where:{ $0.id == accountID })?.currency != v { flow.accountID = nil } }
@@ -94,7 +96,7 @@ struct PlanFactEditor: View {
             Text(flow.title).beeFont(.headline)
             BeePicker("Вхождение",selection:$occurrenceID) { Text("Выберите период").tag(""); ForEach(occurrences) { Text(CalendarDays.label($0.anchor,full:true)).tag($0.id) } }
             PlanningMoneyField(title:"Учесть сумму",amount:$amount,currency:flow.currency)
-            BeePicker("Связать существующую операцию",selection:$operationID) { Text("Создать новую").tag(nil as UUID?); ForEach(db.operations.filter { $0.kind == (flow.purpose == .income ? .income : .expense) && (try? db.account($0.accountID).currency) == flow.currency }) { Text("\($0.date) · \(BeeFormat.money($0.amount,currency:flow.currency)) · \($0.comment)").tag(Optional($0.id)) } }
+            BeePicker("Связать существующую операцию",selection:$operationID) { Text("Создать новую").tag(nil as UUID?); ForEach(db.operations.filter { $0.kind == (flow.purpose == .income ? .income : .expense) && (try? db.account($0.accountID).currency) == flow.currency }) { Text("\($0.date.rawValue) · \(BeeFormat.money($0.amount,currency:flow.currency)) · \($0.comment)").tag(Optional($0.id)) } }
             if operationID == nil { BeePicker("Счёт",selection:$accountID) { Text("Выберите").tag(nil as UUID?); ForEach(db.accounts.filter { !$0.archived && $0.kind == .ordinary && $0.currency == flow.currency }) { Text($0.name).tag(Optional($0.id)) } }; PlanningDateField(title:"Дата факта",day:$date) }
             Text("План не подтверждается автоматически. Связанный факт учитывается один раз; возможна частичная оплата.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
         }

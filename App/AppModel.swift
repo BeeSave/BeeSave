@@ -5,9 +5,10 @@ import BudgetCore
 import BudgetPresentation
 
 enum SectionID: String, CaseIterable, Identifiable {
-    case dashboard = "Главная", accounts = "Мои счета", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", planning = "Планирование", projects = "Проекты", references = "Справочники", financialCalendar = "Календарь"
+    case dashboard = "Обзор", accounts = "Счета", operations = "Операции", expenses = "Расходы", incomes = "Доходы", budgets = "Бюджет", planning = "План", projects = "Проекты", references = "Справочники", financialCalendar = "Календарь"
+    static var allCases: [SectionID] { [.dashboard, .planning, .projects, .accounts, .operations] }
     var id: String { rawValue }
-    var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .planning: "chart.xyaxis.line"; case .projects: "flag"; case .references: "books.vertical"; case .financialCalendar: "calendar" } }
+    var icon: String { switch self { case .dashboard: "square.grid.2x2"; case .accounts: "wallet.bifold"; case .operations: "list.bullet.rectangle"; case .expenses: "arrow.up.right"; case .incomes: "arrow.down.left"; case .budgets: "chart.pie"; case .planning: "chart.xyaxis.line"; case .projects: "flag"; case .references: "books.vertical"; case .financialCalendar: "calendar" } }
 }
 enum SettingsTask: String, CaseIterable, Identifiable {
     case general = "Общие", appearance = "Внешний вид", access = "Вход и защита", rates = "Валюты и курсы", backups = "Резервные копии", transfer = "Импорт и экспорт", reminders = "Напоминания"
@@ -15,7 +16,7 @@ enum SettingsTask: String, CaseIterable, Identifiable {
 }
 struct SheetRoute: Identifiable {
     enum Kind { case planFlow, savingsGoal, taxProfile, eventSettings, planFact, account, bank, financialPayment, scheduledPayment, scheduledDetail, operation, reconciliation, category, project, budget, report, reportView, layout, importCSV, restore }
-    var id = UUID(); var kind: Kind; var entityID: UUID?; var operationKind = OperationKind.expense; var accountContext: UUID?; var budgetKind = BudgetKind.monthly
+    var id = UUID(); var kind: Kind; var entityID: UUID?; var operationKind = OperationKind.expense; var accountContext: UUID?; var budgetKind = BudgetKind.monthly; var planPurpose: PlanPurpose?
 }
 @MainActor final class AppModel: ObservableObject {
     var planningSession = PlanningToolSession()
@@ -26,14 +27,27 @@ struct SheetRoute: Identifiable {
     @Published var planningRows: [PlannedOccurrence] = []
     @Published var planningBusy = false
     @Published var planningError: String?
-    @Published var planningProjectID: UUID?
+    // Publish task changes explicitly; scroll memory must not redraw large ledgers.
+    var navigation = NavigationState()
+    var planningProjectID: UUID? {
+        get { navigation.current.section == .projects ? navigation.current.objectID : nil }
+        set { if newValue != nil || navigation.current.section == .projects { navigate(WorkspaceRoute(.projects, objectID: newValue)) } }
+    }
+    var historyAccount: UUID? {
+        get { navigation.current.section == .accounts ? navigation.current.objectID : nil }
+        set { if newValue != nil || navigation.current.section == .accounts { navigate(WorkspaceRoute(.accounts, objectID: newValue)) } }
+    }
+    var section: SectionID {
+        get { switch navigation.current.section { case .overview: .dashboard; case .plan: .planning; case .projects: .projects; case .accounts: .accounts; case .operations: .operations } }
+        set { navigateLegacy(newValue) }
+    }
     #if DEBUG && UI_SMOKE
     @Published var previewAppearance: ColorScheme? = nil
     @Published var previewReduceTransparency = false
     @Published var previewReduceMotion = false
     @Published var previewScenario = PreviewScenario.filled
     #endif
-    @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var section = SectionID.dashboard; @Published var sheet: SheetRoute?; @Published var historyAccount: UUID?; @Published var error: String?; @Published var backupError: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var drilldownCurrency: String?; @Published var startupError: String?
+    @Published var settingsTask = SettingsTask.general; @Published var showGettingStarted = false; @Published var db: Database?; @Published var bootstrap: Bootstrap?; @Published var sheet: SheetRoute?; @Published var error: String?; @Published var backupError: String?; @Published var busy = false; @Published var rateBusy = false; @Published var retryAt: Date?; @Published var drilldownTitle = "Операции показателя"; @Published var drilldownFilters = Filters(); @Published var drilldown: [UUID]?; @Published var drilldownCurrency: String?; @Published var startupError: String?
     @Published var noticeMessage: AppNotice?
     @Published var rateError: String?
     private var noticeTask: Task<Void, Never>?
@@ -139,7 +153,7 @@ struct SheetRoute: Identifiable {
         } }
     }
     func lock() {
-        planningSession.revoke(); cancelPlanning(); planningProjectID = nil
+        planningSession.revoke(); cancelPlanning(); navigation.clear()
         dailyBackupID = UUID(); dailyBackupTask?.cancel(); dailyBackupTask = nil; dailyBackupBusy = false
         BudgetWindows.hideSensitiveWindows()
         rateError = nil

@@ -7,12 +7,16 @@ struct BudgetsView: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
     @State private var kind = BudgetKind.monthly
+    private let route = WorkspaceRoute(.operations, operations: .budgets)
     var body: some View { if let db = model.db { ScrollView { VStack(alignment: .leading, spacing: 18) {
         SectionHeading(title: "Бюджет") { Button(kind == .monthly ? "Месячный бюджет" : "Проектный бюджет", systemImage: "plus") { model.sheet = SheetRoute(kind: .budget, budgetKind: kind) }.buttonStyle(BeePrimaryStyle()) }
         BeePicker("Бюджеты", selection: $kind) { Text("Месячные").tag(BudgetKind.monthly); Text("Проектные").tag(BudgetKind.project) }.beePickerStyle(.segmented)
         if !db.budgets.contains(where: { $0.kind == kind }) { EmptyState(title: "Бюджет не задан", detail: "Можно вести расходы без плана и добавить его позже.", icon: "chart.pie").beeCard() }
         ForEach(db.budgets.filter { $0.kind == kind }.sorted { $0.start > $1.start }) { budget in BudgetCard(budget: budget) }
-    }.padding(26) } } }
+    }.padding(26).background(WorkspaceScrollMemory(route: route)) }
+        .onAppear { kind = model.navigation.context(for: route).budgetKind }
+        .onChange(of: kind) { _, value in model.updateWorkspaceContext(route) { $0.budgetKind = value } }
+    } }
 }
 struct BudgetCard: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
@@ -136,7 +140,7 @@ struct ReportEditor: View {
             CurrencyPicker(title: "Валюта отчёта", selection: $report.currency)
             Divider(); Text("Выборка").beeFont(.headline); FilterBar(filters: $report.filters, showParticipation: report.dataset == .flows, allowCategoryProject: report.dataset == .flows, kinds: report.metric == .income ? [.income] : report.metric == .expense ? [.expense] : [.income, .expense])
             if report.dataset != .flows { Text("Категории, проекты и участие в бюджетах к остаткам не применяются.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
-            Toggle("Добавить на Главную", isOn: $addDashboard).toggleStyle(.checkbox)
+            Toggle("Добавить в Обзор", isOn: $addDashboard).toggleStyle(.checkbox)
             DisclosureGroup("Предпросмотр") { ReportDisplay(report: report, onDetail: { ids, title, filters in detail = OperationDetailContext(title: title, ids: ids, filters: filters) }, onAccount: { id in detail = OperationDetailContext(title: "История счёта", accountID: id) }).padding(.top, 12) }
         }.onAppear { guard !loaded else { return }; if let old = model.db?.reports.first(where: { $0.id == id }) { report = old; addDashboard = model.db?.dashboard.contains { $0.reportID == old.id } ?? false } else { report.currency = model.db?.settings.reportCurrency ?? "RUB" }; original = report; originalAdd = addDashboard; loaded = true }
             .onChange(of: report.grouping) { normalizePresentation() }.onChange(of: report.metric) { normalizePresentation() }
@@ -155,7 +159,7 @@ struct ReportViewer: View {
     @State private var editing = false
     @State private var detail: OperationDetailContext?
     var body: some View { if editing { ReportEditor(id: id) } else if let report = model.db?.reports.first(where: { $0.id == id }) {
-        VStack(alignment: .leading, spacing: 20) { HStack { Text(report.name).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() }.keyboardShortcut(.cancelAction) }; Text("\(report.dataset.title) · \(report.metric.title) · \(report.currency) · \(CalendarDays.range(report.filters))").beeFont(.caption).foregroundStyle(BeeStyle.muted); ScrollView { ReportDisplay(report: report, onDetail: { ids, title, filters in detail = OperationDetailContext(title: title, ids: ids, filters: filters) }, onAccount: { id in detail = OperationDetailContext(title: "История счёта", accountID: id) }) }; Divider(); HStack { Button("Удалить отчёт", role: .destructive) { if confirmDeletion(report.name, consequence: "Операции сохранятся. Отчёт и его блоки будут удалены.") { model.perform { $0.reports.removeAll { $0.id == report.id }; $0.dashboard.removeAll { $0.reportID == report.id } }; dismiss() } }; Spacer(); Button("Изменить") { editing = true }; Button("На Главную") { model.perform { if !$0.dashboard.contains(where: { $0.reportID == report.id }) { $0.dashboard.append(DashboardBlock(kind: "report", reportID: report.id)) } } }.buttonStyle(BeePrimaryStyle()).disabled(model.db?.dashboard.contains { $0.reportID == report.id } == true) } }.padding(24).beeSheet(width: 680, height: 600).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).beeAppearance().sheet(item: $detail) { OperationDetailSheet(context: $0) }
+        VStack(alignment: .leading, spacing: 20) { HStack { Text(report.name).beeFont(.title2.bold()); Spacer(); Button("Закрыть") { dismiss() }.keyboardShortcut(.cancelAction) }; Text("\(report.dataset.title) · \(report.metric.title) · \(report.currency) · \(CalendarDays.range(report.filters))").beeFont(.caption).foregroundStyle(BeeStyle.muted); ScrollView { ReportDisplay(report: report, onDetail: { ids, title, filters in detail = OperationDetailContext(title: title, ids: ids, filters: filters) }, onAccount: { id in detail = OperationDetailContext(title: "История счёта", accountID: id) }) }; Divider(); HStack { Button("Удалить отчёт", role: .destructive) { if confirmDeletion(report.name, consequence: "Операции сохранятся. Отчёт и его блоки будут удалены.") { model.perform { $0.reports.removeAll { $0.id == report.id }; $0.dashboard.removeAll { $0.reportID == report.id } }; dismiss() } }; Spacer(); Button("Изменить") { editing = true }; Button("В Обзор") { model.perform { if !$0.dashboard.contains(where: { $0.reportID == report.id }) { $0.dashboard.append(DashboardBlock(kind: "report", reportID: report.id)) } } }.buttonStyle(BeePrimaryStyle()).disabled(model.db?.dashboard.contains { $0.reportID == report.id } == true) } }.padding(24).beeSheet(width: 680, height: 600).foregroundStyle(BeeStyle.text).background(BeeStyle.surface).beeAppearance().sheet(item: $detail) { OperationDetailSheet(context: $0) }
     } }
 }
 struct ReportCalculationKey: Equatable {

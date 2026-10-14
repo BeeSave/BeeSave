@@ -12,6 +12,9 @@ struct AccountPlanningCard: View {
         if account.currency != db.settings.baseCurrency { if let rate = try? Reports.resolvedRate(from:account.currency,to:db.settings.baseCurrency,rates:db.rates,on:.today),let value = try? Money.convert(balance,from:account.currency,to:db.settings.baseCurrency,rate:rate.value) { Text("Оценка: " + BeeFormat.money(value,currency:db.settings.baseCurrency) + (rate.date.map { " · курс " + $0.rawValue } ?? "")).beeFont(.caption).foregroundStyle(BeeStyle.muted) } else { Text("Нет курса для оценки в " + db.settings.baseCurrency).beeFont(.caption).foregroundStyle(BeeStyle.warning) } }
         } else { Text("Остаток не рассчитан: проверьте данные счёта").foregroundStyle(BeeStyle.warning) }
         if let contract = db.contract(for:account.id),let end = contract.end { Text("Срок: " + CalendarDays.label(end,full:true)).beeFont(.caption).foregroundStyle(BeeStyle.muted) }
-        Button("Открыть счёт",systemImage:"arrow.right") { model.openHistory(account.id) }.buttonStyle(BeeRowStyle())
+        WrappingLayout(spacing: 12) {
+            Button("Открыть счёт",systemImage:"arrow.right") { model.openHistory(account.id) }.buttonStyle(BeeRowStyle())
+            Button("Сверить остаток") { model.sheet = SheetRoute(kind: .reconciliation, entityID: account.id) }.disabled(account.archived)
+        }
     }.frame(maxWidth:.infinity,alignment:.leading).beeCard().accessibilityElement(children:.contain) }
 }

@@ -140,7 +140,7 @@ struct OperationEditor: View {
                 }
                 if let source = model.db?.operations.first(where:{ $0.id == id })?.reconciliation {
                     let currency = source.currency ?? account?.currency ?? "RUB"
-                    VStack(alignment:.leading,spacing:6) { Text("Источник: сверка остатка").beeFont(.headline); Text("\(source.date) · учётный \(BeeFormat.money(source.balance,currency:currency)) → наблюдаемый \(BeeFormat.money(source.observed,currency:currency))").beeFont(.caption); Text(source.reason).beeFont(.caption); Text("Историческое наблюдение: изменение операции не устанавливает прежний целевой остаток.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
+                    VStack(alignment:.leading,spacing:6) { Text("Источник: сверка остатка").beeFont(.headline); Text("\(source.date.rawValue) · учётный \(BeeFormat.money(source.balance,currency:currency)) → наблюдаемый \(BeeFormat.money(source.observed,currency:currency))").beeFont(.caption); Text(source.reason).beeFont(.caption); Text("Историческое наблюдение: изменение операции не устанавливает прежний целевой остаток.").beeFont(.caption).foregroundStyle(BeeStyle.muted) }
                 }
                 if showRates { rateFields }
                 if let account { Text("Текущий остаток: " + BeeFormat.money((try? model.db?.balance(account.id)) ?? 0, currency: account.currency)).beeFont(.caption).foregroundStyle(BeeStyle.muted) }

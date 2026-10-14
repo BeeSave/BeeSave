@@ -3,6 +3,7 @@ import BudgetCore
 import BudgetPresentation
 
 struct UpcomingPaymentsCard: View {
+    var limit = 5
     @EnvironmentObject var model: AppModel; @State private var days = 30; @State private var all = false; @State private var from = Day.today; @State private var through = Day.today.adding(30)
     private var rows: [PlannedOccurrence] { model.planningRows.filter { row in guard let db = model.db else { return false }; return !row.income && row.purpose != .living && PlanningEngine.affectsPersonal(row,db:db) && (row.date < .today || (row.date >= (days == -1 ? from : .today) && row.date <= (days == -1 ? through : .today.adding(days)))) }.sorted { $0.date < $1.date } }
     private func total(_ items: [PlannedOccurrence]) -> (Int64,Int) {
@@ -20,24 +21,25 @@ struct UpcomingPaymentsCard: View {
         if value.1 > 0 { Label("Неполный итог: \(value.1) выплат требуют суммы или курса",systemImage:"exclamationmark.triangle").beeFont(.caption).foregroundStyle(BeeStyle.warning) }
         if let p = model.planningProjection,let last = p.points.last(where:{ $0.event.date <= (days == -1 ? through : .today.adding(days)) }) { Text((p.complete ? "После выплат и плановых поступлений: " : "Неполный прогноз остатка: ") + BeeFormat.money(last.balance,currency:p.currency)).beeFont(.caption).foregroundStyle(last.belowReserve ? BeeStyle.negative : BeeStyle.muted) }
         if rows.isEmpty { Text(model.planningBusy ? "Пересчёт плана…" : "В этом периоде нет запланированных выплат").foregroundStyle(BeeStyle.muted) }
-        ForEach(Array(all ? rows : Array(rows.prefix(5)))) { row in Button { model.openPlanningSource(row) } label: { HStack(alignment:.top,spacing:12) {
+        ForEach(Array(all ? rows : Array(rows.prefix(limit)))) { row in Button { model.openPlanningSource(row) } label: { HStack(alignment:.top,spacing:12) {
             VStack(alignment:.leading,spacing:3) { Text(row.date < .today ? "Просрочено" : row.date == .today ? "Сегодня" : CalendarDays.label(row.date)).foregroundStyle(row.date < .today ? BeeStyle.negative : BeeStyle.muted); Text(row.title).beeFont(.subheadline).fixedSize(horizontal:false,vertical:true); Text(row.source == "finance" ? "По договору" : row.source == "project" ? "Проектный план" : row.source == "tax" ? "Налоговый расчёт" : row.certainty.title).beeFont(.caption).foregroundStyle(BeeStyle.muted); if let accountID = row.accountID,let account = db.accounts.first(where:{ $0.id == accountID }) { Text(account.name).beeFont(.caption).foregroundStyle(BeeStyle.muted) }; if let id = row.projectID,let project = db.projects.first(where:{ $0.id == id }) { Text(project.name).beeFont(.caption).foregroundStyle(BeeStyle.muted) } }
             Spacer(); Text(row.remaining.map { BeeFormat.money($0,currency:row.currency) } ?? "Уточните сумму").monospacedDigit(); Image(systemName:"chevron.right").foregroundStyle(BeeStyle.muted)
         } }.buttonStyle(BeeRowStyle()) }
-        HStack { if rows.count > 5 { Button(all ? "Свернуть" : "Все выплаты (\(rows.count))") { all.toggle() } }; Spacer(); Button("Календарь") { model.section = .financialCalendar }; Button("Запланировать") { model.sheet = SheetRoute(kind:.planFlow) } }
+        HStack { if rows.count > limit { Button(all ? "Свернуть" : "Все выплаты (\(rows.count))") { all.toggle() } }; Spacer(); Button("Календарь") { model.navigate(WorkspaceRoute(.plan)) }; Button("Запланировать") { model.sheet = SheetRoute(kind:.scheduledPayment) } }
         Text("Неоплаченные суммы; фактический остаток не списывается автоматически.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
     }.beeCard() } }
 }
 struct UpcomingAttentionCard: View {
+    var limit = 5
     @EnvironmentObject var model: AppModel; @State private var all = false
     var body: some View { VStack(alignment:.leading,spacing:14) {
         HStack { Text("Предстоящие события").beeFont(.headline); Spacer(); Button("Настроить",systemImage:"slider.horizontal.3") { model.sheet = SheetRoute(kind:.eventSettings) } }
         if model.planningAttention.isEmpty { Text(model.planningBusy ? "Проверяем сроки…" : "Событий, требующих действия, пока нет").foregroundStyle(BeeStyle.muted) }
-        ForEach(Array(all ? model.planningAttention : Array(model.planningAttention.prefix(5)))) { event in VStack(alignment:.leading,spacing:8) {
+        ForEach(Array(all ? model.planningAttention : Array(model.planningAttention.prefix(limit)))) { event in VStack(alignment:.leading,spacing:8) {
             HStack(alignment:.top) { Image(systemName:event.type == "deposit" ? "clock.arrow.circlepath" : event.priority == 0 ? "exclamationmark.triangle" : "calendar").foregroundStyle(event.priority == 0 ? BeeStyle.warning : BeeStyle.positive); VStack(alignment:.leading,spacing:4) { Text(event.title).beeFont(.headline); Text(event.reason).beeFont(.caption).foregroundStyle(BeeStyle.muted) }; Spacer(); Text(CalendarDays.label(event.date)).beeFont(.caption) }
             HStack { Button(event.action) { open(event) }.buttonStyle(BeeRowStyle()); Spacer(); Menu("Позже") { Button("Напомнить завтра") { update(event,until:.today.adding(1)) }; Button("Через неделю") { update(event,until:.today.adding(7)) }; Button("Скрыть это событие") { update(event,until:nil) }; Button("Не показывать этот источник") { guard var s = model.db?.planningData.eventSettings else { return }; s.sourceExclusions.append(event.sourceID.uuidString); model.changePlanning(.settings(s)) } } }
         }.padding(.vertical,6) }
-        if model.planningAttention.count > 5 { Button(all ? "Свернуть" : "Все события (\(model.planningAttention.count))") { all.toggle() } }
+        if model.planningAttention.count > limit { Button(all ? "Свернуть" : "Все события (\(model.planningAttention.count))") { all.toggle() } }
     }.beeCard() }
     private func open(_ event: PlanningAttentionEvent) {
         if let row = event.occurrence { model.openPlanningSource(row) }

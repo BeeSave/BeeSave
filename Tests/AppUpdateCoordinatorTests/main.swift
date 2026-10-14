@@ -1,6 +1,7 @@
 import AppKit
 import BudgetCore
 import BudgetPresentation
+import Combine
 
 private actor ReleaseGate {
     private var first: CheckedContinuation<Data, Never>?
@@ -85,6 +86,33 @@ private struct Transport: AppUpdateTransport {
         let model = AppModel()
         let fixtureIdentity = model.db!.id
         let fixtureRevision = model.db!.revision ?? 0
+        let navigationBytes = try Data(contentsOf: model.vault.url)
+        var scrollRedraws = 0
+        let scrollObservation = model.objectWillChange.sink { scrollRedraws += 1 }
+        for y in 1...100 { model.updateWorkspaceContext(WorkspaceRoute(.operations), notifyViews: false) { $0.scrollOffset = Double(y); $0.tableScrollX = Double(y * 2) } }
+        check(scrollRedraws == 0, "scroll memory never triggers ledger sorting or a full view redraw")
+        model.updateWorkspaceContext(WorkspaceRoute(.operations)) { $0.filters.search = "Fictional search" }
+        check(scrollRedraws == 1, "task filters still publish the changed view")
+        scrollObservation.cancel()
+        let calendarRoute = WorkspaceRoute(.plan, calendar: .contracts)
+        model.navigate(calendarRoute)
+        model.updateWorkspaceContext(calendarRoute) { $0.search = "Fictional contract"; $0.scrollOffset = 320; $0.includeFulfilled = true }
+        let calendarContext = model.navigation.context(for: calendarRoute)
+        model.openHistory(model.db!.accounts[0].id)
+        check(model.navigation.current.section == .accounts && model.historyAccount == model.db!.accounts[0].id, "account shortcut retains its canonical object route")
+        model.navigateBack()
+        check(model.navigation.current == calendarRoute && model.navigation.context(for: calendarRoute) == calendarContext, "actual app return preserves the source filters and position")
+        model.sheet = SheetRoute(kind: .planFlow)
+        model.navigate(WorkspaceRoute(.projects)); model.navigateBack()
+        check(model.navigation.current == calendarRoute, "presented form blocks both forward and backward navigation")
+        model.sheet = nil; model.notice = nil
+        let formID = UUID(); model.updateForms.insert(formID)
+        model.navigate(WorkspaceRoute(.operations))
+        check(model.navigation.current == calendarRoute, "local project form blocks navigation without a root sheet")
+        model.updateForms.remove(formID); model.notice = nil
+        model.updateFrozen = true; model.navigate(WorkspaceRoute(.operations)); model.updateFrozen = false
+        check(model.navigation.current == calendarRoute, "installation freeze blocks navigation")
+        check(try Data(contentsOf: model.vault.url) == navigationBytes && model.db!.revision == fixtureRevision, "navigation does not write financial data or advance its revision")
         var living = PlanFlow(title: "Fictional planning integration", purpose: .living, amount: 10000, currency: "RUB", start: .today)
         living.frequency = .monthly
         try model.savePlanning(.flow(living))
@@ -97,6 +125,7 @@ private struct Transport: AppUpdateTransport {
         let oldSession = model.planningSession
         let oldAccess = PlanningAccess(actorID:fixtureIdentity,fullPlan:true,canApply:false,sessionID:oldSession.id)
         model.lock()
+        check(model.navigation.current == WorkspaceRoute(.overview) && model.navigation.contexts.isEmpty && !model.navigation.canGoBack, "lock clears all navigation names, IDs, filters and history")
         do { try oldSession.check(oldAccess); check(false,"old planning session must be revoked") } catch { check(true,"locking revokes planning tools") }
         check(model.planningProjection == nil && model.planningRows.isEmpty && model.planningAttention.isEmpty,"locking clears financial planning projections")
         model.loadPreview(.filled)

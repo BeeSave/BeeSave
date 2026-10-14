@@ -2,7 +2,9 @@
 
 Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-BeeSave 1.9 adds financial planning and projects. Plan regular income, living costs, obligations, savings, and major spending across upcoming periods. Explore mortgage prepayments, renovation budgets, and small-business projects with local participants. Russian personal income tax and deduction estimates cover supported cases for 2025 and 2026.
+BeeSave 1.10 groups everyday tasks into Overview, Plan, Projects, Accounts, and Operations. The overview puts available funds, trends, and upcoming obligations first. Separate planning pages and project forms keep each task focused; Back restores your previous filters and position.
+
+Financial planning and projects cover regular income, living costs, obligations, savings, and major spending. Explore mortgage prepayments, renovation budgets, and small-business projects with local participants. Russian personal income tax and deduction estimates cover supported cases for 2025 and 2026.
 
 Account reconciliation can record a balance difference as one income or expense, or as a neutral adjustment. Switch accounts between lists and cards. Home separates upcoming payments from useful reminders and shows actual and forecast income and expenses.
 

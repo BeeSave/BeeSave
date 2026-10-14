@@ -1,5 +1,6 @@
 import SwiftUI
 import BudgetCore
+import BudgetPresentation
 
 extension AppModel {
     func savePlanning(_ command: PlanningCommand, reason: String = "Изменение пользователем", expectedRevision: UInt64? = nil) throws {
@@ -37,10 +38,11 @@ extension AppModel {
         }
     }
     func openPlanningSource(_ row: PlannedOccurrence) {
+        updateWorkspaceContext(navigation.current) { $0.selectedID = row.sourceID }
         switch row.source {
         case "scheduled": sheet = SheetRoute(kind:.scheduledDetail,entityID:row.sourceID)
         case "finance": if let contract = db?.financeData.contracts.first(where:{ $0.id == row.sourceID }) { openHistory(contract.accountID) }
-        case "project", "projectLoan": planningProjectID = row.projectID; section = .projects
+        case "project", "projectLoan": navigate(WorkspaceRoute(.projects, project: .costs, objectID: row.projectID))
         case "tax": sheet = SheetRoute(kind:.taxProfile,entityID:row.sourceID)
         default: sheet = SheetRoute(kind:.planFlow,entityID:row.sourceID)
         }
