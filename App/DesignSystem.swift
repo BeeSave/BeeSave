@@ -66,6 +66,7 @@ struct BeeSidebar<Item: Hashable, Row: View>: View {
     var items: [Item]
     @Binding var selection: Item
     var name: String
+    var fillsBackground = true
     var enabled: (Item) -> Bool = { _ in true }
     @ViewBuilder var row: (Item) -> Row
     @Environment(\.beeAppearance) private var appearance
@@ -88,7 +89,7 @@ struct BeeSidebar<Item: Hashable, Row: View>: View {
             }
           }.padding(.horizontal, 10).padding(.top, 28)
         }
-            .background(BeeStyle.background)
+            .background { if fillsBackground { BeeStyle.background } }
             .accessibilityLabel(name)
             .focusable()
             .focused($navigationFocused)
@@ -112,14 +113,18 @@ struct BeeSidebar<Item: Hashable, Row: View>: View {
 
 private struct BeeSidebarButtonStyle: PrimitiveButtonStyle {
     var selected: Bool
-    @ViewBuilder func makeBody(configuration: Configuration) -> some View {
-        if selected {
-            Button(action: configuration.trigger) { configuration.label }
-                .buttonStyle(.glassProminent).controlSize(.large)
-                .buttonBorderShape(.roundedRectangle(radius: 12)).tint(BeeStyle.honey)
-        } else {
-            Button(action: configuration.trigger) { configuration.label.padding(.horizontal, 16) }
-                .buttonStyle(.borderless).controlSize(.large)
+    func makeBody(configuration: Configuration) -> some View {
+        // The selection material must not participate in row measurement.
+        // Keep the same button tree and insets for every navigation state.
+        Button(action: configuration.trigger) {
+            configuration.label.padding(.horizontal, 16).padding(.vertical, 8)
+        }
+        .buttonStyle(.borderless).controlSize(.large)
+        .background {
+            if selected {
+                Color.clear.glassEffect(.regular.tint(BeeStyle.honey), in: .rect(cornerRadius: 12))
+                    .allowsHitTesting(false)
+            }
         }
     }
 }

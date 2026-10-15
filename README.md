@@ -2,11 +2,11 @@
 
 Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-BeeSave 1.10 groups everyday tasks into Overview, Plan, Projects, Accounts, and Operations. The overview puts available funds, trends, and upcoming obligations first. Separate planning pages and project forms keep each task focused; Back restores your previous filters and position.
+BeeSave 1.10.1 groups everyday tasks into Overview, Plan, Projects, Accounts, and Operations. The overview puts available funds, trends, and upcoming obligations first. Separate planning pages and project forms keep each task focused; Back restores your previous filters and position.
 
 Financial planning and projects cover regular income, living costs, obligations, savings, and major spending. Explore mortgage prepayments, renovation budgets, and small-business projects with local participants. Russian personal income tax and deduction estimates cover supported cases for 2025 and 2026.
 
-Account reconciliation can record a balance difference as one income or expense, or as a neutral adjustment. Switch accounts between lists and cards. Home separates upcoming payments from useful reminders and shows actual and forecast income and expenses.
+Account reconciliation can record a balance difference as one income or expense, or as a neutral adjustment. Switch accounts between lists and cards using the icons in the top toolbar. Sidebar labels stay in place when switching sections, with a continuous background behind Settings. Home separates upcoming payments from useful reminders and shows actual and forecast income and expenses.
 
 Plans never create paid transactions automatically. Confirm a payment or link an existing transaction to account for it once. Forecasts show missing amounts or exchange rates, and conditional tax refunds do not cover obligations in the conservative plan. Country rules and contract terms are separate; unsupported taxes require a manual estimate.
 

@@ -113,6 +113,30 @@ private struct Transport: AppUpdateTransport {
         model.updateFrozen = true; model.navigate(WorkspaceRoute(.operations)); model.updateFrozen = false
         check(model.navigation.current == calendarRoute, "installation freeze blocks navigation")
         check(try Data(contentsOf: model.vault.url) == navigationBytes && model.db!.revision == fixtureRevision, "navigation does not write financial data or advance its revision")
+        let accountContextRoute = WorkspaceRoute(.accounts)
+        model.updateWorkspaceContext(accountContextRoute) { $0.search = "USD"; $0.archived = true; $0.accountKind = .ordinary; $0.scrollOffset = 120 }
+        let accountContextBefore = model.navigation.context(for: accountContextRoute)
+        let accountViewBefore = model.db!
+        model.changePlanning(.accountView(true, accountViewBefore.planningData.accountSort))
+        check(model.error == nil && model.db!.planningData.accountCards, "account card preference uses the existing encrypted app command")
+        var accountViewRetained = model.db!
+        accountViewRetained.planningData.accountCards = accountViewBefore.planningData.accountCards
+        accountViewRetained.planningData.accountSort = accountViewBefore.planningData.accountSort
+        accountViewRetained.planningData.audit = accountViewBefore.planningData.audit
+        accountViewRetained.planningData.receipts = accountViewBefore.planningData.receipts
+        accountViewRetained.revision = accountViewBefore.revision
+        var accountViewExpected = accountViewBefore
+        accountViewExpected.planningData = accountViewBefore.planningData
+        check(accountViewRetained == accountViewExpected, "account view changes only presentation preference and its existing transaction metadata")
+        check(model.navigation.context(for: accountContextRoute) == accountContextBefore, "account view preserves search, archive, type and scroll context")
+        let accountViewKey = try model.vault.withKey { $0 }
+        model.vault.close()
+        let reopenedAccountVault = VaultStore(url: model.vault.url)
+        try reopenedAccountVault.unlock(key: accountViewKey)
+        check(reopenedAccountVault.db == model.db && reopenedAccountVault.db!.planningData.accountCards,
+              "a fresh vault instance restores the saved account view and all financial data")
+        reopenedAccountVault.close()
+        try model.vault.unlock(key: accountViewKey)
         var living = PlanFlow(title: "Fictional planning integration", purpose: .living, amount: 10000, currency: "RUB", start: .today)
         living.frequency = .monthly
         try model.savePlanning(.flow(living))

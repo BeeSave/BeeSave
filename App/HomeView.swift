@@ -8,22 +8,23 @@ struct HomeView: View {
     @Environment(\.beeAppearance) private var appearance
     var body: some View {
         NavigationSplitView {
-            BeeSidebar(items: SectionID.allCases, selection: $model.section, name: "Боковое меню") { item in
+            VStack(spacing: 0) {
+                BeeSidebar(items: SectionID.allCases, selection: $model.section, name: "Боковое меню", fillsBackground: false) { item in
                     HStack(spacing: 12) {
                         Image(systemName: item.icon).frame(width: 26 * appearance.scale).accessibilityHidden(true)
                         Text(item.rawValue).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     }.beeFont(.body).padding(.vertical, 5)
-            }
-                .clipped()
-                .navigationSplitViewColumnWidth(min: 210 + 140 * (appearance.scale - 1), ideal: 240 + 120 * (appearance.scale - 1), max: 360)
-                .safeAreaInset(edge: .bottom) {
-                    HStack {
-                        SettingsLink { Label("Настройки", systemImage: "gearshape") }
-                        Spacer()
-                        Button { model.lock() } label: { Image(systemName: "lock") }
-                            .help("Заблокировать бюджет · ⇧⌘L").accessibilityLabel("Заблокировать бюджет")
-                    }.buttonStyle(.borderless).beeFont(.caption).padding(16)
                 }
+                HStack {
+                    SettingsLink { Label("Настройки", systemImage: "gearshape") }
+                    Spacer()
+                    Button { model.lock() } label: { Image(systemName: "lock") }
+                        .help("Заблокировать бюджет · ⇧⌘L").accessibilityLabel("Заблокировать бюджет")
+                }.buttonStyle(.borderless).beeFont(.caption).padding(16)
+            }
+            .background(BeeStyle.background)
+            .clipped()
+            .navigationSplitViewColumnWidth(min: 210 + 140 * (appearance.scale - 1), ideal: 240 + 120 * (appearance.scale - 1), max: 360)
         } detail: {
             VStack(spacing: 0) {
                 if model.navigation.canGoBack {
@@ -79,15 +80,17 @@ struct AccountsView: View {
                 }
             }
         } else { ScrollView { LazyVStack(alignment: .leading, spacing: 18) {
-            SectionHeading(title: "Счета") { Button("Новый счёт", systemImage: "plus") { model.sheet = SheetRoute(kind: .account) }.buttonStyle(BeePrimaryStyle()) }
+            SectionHeading(title: "Счета") {
+                accountViewButton("Список", icon: "list.bullet", cards: false, db: db)
+                accountViewButton("Карточки", icon: "square.grid.2x2", cards: true, db: db)
+                Button("Новый счёт", systemImage: "plus") { model.sheet = SheetRoute(kind: .account) }.buttonStyle(BeePrimaryStyle())
+            }
             BeeSegments(title: "Список счетов", labels: ["Активные", "Архив"], selection: Binding(get: { archived.wrappedValue ? 1 : 0 }, set: { archived.wrappedValue = $0 == 1 }))
                 .frame(maxWidth: 560 * pow(appearanceStore.preferences.scale, 0.5)).frame(maxWidth: .infinity)
             BeePicker("Тип счёта", selection: financialKind) { Text("Все типы").tag(nil as AccountKind?); ForEach(AccountKind.allCases, id: \.self) { Text($0.title).tag(Optional($0)) } }.frame(maxWidth: 300 * appearanceStore.preferences.scale)
             VStack(alignment:.leading,spacing:12) {
                 TextField("Найти счёт, банк или валюту",text:accountSearch).textFieldStyle(BeeTextFieldStyle())
-                WrappingLayout(spacing:12) { BeeSegments(title:"Вид счетов",labels:["Список","Карточки"],selection:Binding(get:{ db.planningData.accountCards ? 1 : 0 },set:{ model.changePlanning(.accountView($0 == 1,db.planningData.accountSort)) })).frame(width:240 * appearanceStore.preferences.scale)
                 BeePicker("Сортировка",selection:Binding(get:{ db.planningData.accountSort },set:{ model.changePlanning(.accountView(db.planningData.accountCards,$0)) })) { Text("Название").tag("name"); Text("Валюта").tag("currency"); Text("Остаток").tag("balance") }.labelsHidden().frame(width:180 * appearanceStore.preferences.scale) }
-            }
             let visible = db.accounts.filter { $0.archived == archived.wrappedValue && (financialKind.wrappedValue == nil || $0.kind == financialKind.wrappedValue) && (accountSearch.wrappedValue.isEmpty || ($0.name + " " + $0.currency + " " + (db.financialBankName($0.bankID) ?? $0.bankID ?? "")).localizedCaseInsensitiveContains(accountSearch.wrappedValue)) }.sorted { lhs,rhs in
                 if db.planningData.accountSort == "currency",lhs.currency != rhs.currency { return lhs.currency < rhs.currency }
                 if db.planningData.accountSort == "balance" && lhs.currency != rhs.currency { return lhs.currency < rhs.currency }
@@ -109,6 +112,29 @@ struct AccountsView: View {
             }
         }.padding(26).background(WorkspaceScrollMemory(route: route)) } }
     } }
+    private func accountViewButton(_ title: String, icon: String, cards: Bool, db: Database) -> some View {
+        Toggle(isOn: Binding(
+            get: { model.db?.planningData.accountCards == cards },
+            set: { selected in
+                if selected { selectAccountView(cards: cards) }
+            }
+        )) {
+            Label(title, systemImage: icon).frame(minWidth: 28, minHeight: 28)
+        }
+        .toggleStyle(.button)
+        .focusable()
+        .onKeyPress(keys: [.space, .return]) { _ in
+            selectAccountView(cards: cards)
+            return .handled
+        }
+        .help(title == "Список" ? "Показать счета списком" : "Показать счета карточками")
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(db.planningData.accountCards == cards ? .isSelected : [])
+    }
+    private func selectAccountView(cards: Bool) {
+        guard let current = model.db, current.planningData.accountCards != cards else { return }
+        model.changePlanning(.accountView(cards, current.planningData.accountSort))
+    }
     private func historyHeader(_ account: Account, db: Database) -> some View {
         VStack(alignment: .leading, spacing: 14) {
                 ViewThatFits(in: .horizontal) {
