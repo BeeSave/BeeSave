@@ -9,7 +9,12 @@ struct AppUpdateCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .appInfo) {
             Button("Проверить обновление") { openWindow(id: "app-update"); updater.check() }
-                .disabled(updater.state.isBusy)
+            #if DEBUG && UI_SMOKE
+            Menu("Обновление QA") {
+                Button("Показать доступное обновление") { updater.check() }
+                Button("Скрыть предложение обновления") { updater.cancel() }
+            }
+            #endif
         }
     }
 }
@@ -63,7 +68,7 @@ struct AppUpdateView: View {
             }
             Spacer(minLength: 0)
             Divider()
-            Text("Проверка выполняется по вашей команде. Финансовые данные в GitHub не передаются.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
+            Text("BeeSave проверяет обновление при запуске. Вы также можете проверить вручную. Финансовые данные в GitHub не передаются.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
             HStack {
                 switch updater.state {
                 case .installing, .cancelling: EmptyView()

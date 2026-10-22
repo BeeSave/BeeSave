@@ -21,12 +21,34 @@ private actor ReleaseGate {
         return release
     }
     var waiting: Bool { first != nil }
+    var requests: Int { count }
     func finishLate() { first?.resume(returning: release); first = nil }
 }
 private struct Transport: AppUpdateTransport {
     let gate: ReleaseGate
     func data(from url: URL, limit: Int) async throws -> Data { await gate.data(url) }
     func download(from url: URL, to file: URL, limit: Int, progress: @escaping @Sendable (Double?) -> Void) async throws { throw AppUpdateError.invalidMetadata }
+}
+
+private actor StartupTransport: AppUpdateTransport {
+    let release: Data
+    let metadata: Data
+    let failure: Int?
+    private(set) var requests: [URL] = []
+    init(release: Data, metadata: Data, failure: Int? = nil) {
+        self.release = release; self.metadata = metadata; self.failure = failure
+    }
+    func data(from url: URL, limit: Int) async throws -> Data {
+        requests.append(url)
+        if let failure {
+            if failure == -1 { throw URLError(.notConnectedToInternet) }
+            throw AppUpdateError.http(failure)
+        }
+        return url == AppUpdateURLs.latest ? release : metadata
+    }
+    func download(from url: URL, to file: URL, limit: Int, progress: @escaping @Sendable (Double?) -> Void) async throws {
+        throw AppUpdateError.invalidMetadata
+    }
 }
 
 @main struct CoordinatorTests {
@@ -62,6 +84,58 @@ private struct Transport: AppUpdateTransport {
             let deadline = Date().addingTimeInterval(5)
             while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 5_000_000) }
         }
+        var inputSelections = 0
+        let inputSelection = LoginInputSelection { inputSelections += 1 }
+        let inputWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 160), styleMask: .titled, backing: .buffered, defer: false)
+        let passwordField = LoginPasswordField.PasswordField(frame: NSRect(x: 20, y: 40, width: 300, height: 32))
+        passwordField.selection = inputSelection
+        inputWindow.contentView?.addSubview(passwordField)
+        inputWindow.makeFirstResponder(passwordField)
+        passwordField.stringValue = "Вымышленный пароль Unicode 123"
+        inputWindow.makeFirstResponder(nil)
+        let startupFixture = try ReleaseGate()
+        var incompatibleJSON = try JSONSerialization.jsonObject(with: startupFixture.metadata) as! [String: Any]
+        incompatibleJSON["minimum_macos"] = "99.0"
+        let incompatibleMetadata = try JSONSerialization.data(withJSONObject: incompatibleJSON)
+        for scenario in ["current", "no-release", "incompatible", "invalid", "offline", "rate-limit", "server-error"] {
+            let failure: Int? = ["no-release": 404, "offline": -1, "rate-limit": 429, "server-error": 500][scenario]
+            let metadata = scenario == "invalid" ? Data("invalid fictional metadata".utf8) : scenario == "incompatible" ? incompatibleMetadata : startupFixture.metadata
+            let transport = StartupTransport(release: startupFixture.release, metadata: metadata, failure: failure)
+            let launch = InstallUpdateManager(client: AppUpdateClient(transport: transport), version: scenario == "current" ? "2.0.0" : "1.0.0", build: 7)
+            launch.checkAtStartup()
+            try await wait { launch.state != .checking }
+            for _ in 0..<10 { launch.checkAtStartup() }
+            let requests = await transport.requests
+            let expected: Bool
+            switch scenario {
+            case "current": expected = launch.state == .current
+            case "no-release": expected = launch.state == .noRelease
+            case "incompatible": if case .incompatible = launch.state { expected = true } else { expected = false }
+            default: if case .failed = launch.state { expected = true } else { expected = false }
+            }
+            check(expected && launch.sidebarTitle == nil && requests.filter { $0 == AppUpdateURLs.latest }.count == 1
+                  && requests.allSatisfy { $0 == AppUpdateURLs.latest || $0.lastPathComponent == "latest.json" },
+                  "startup \(scenario) exposes no install offer, retries or archive requests without a budget")
+        }
+        inputWindow.makeFirstResponder(passwordField)
+        check(inputSelections == 1 && passwordField.stringValue == "Вымышленный пароль Unicode 123",
+              "native password field selects once across refocus without changing Unicode text")
+        check(passwordField.currentEditor()?.inputContext?.allowedInputSourceLocales == nil,
+              "native password editor permits manual selection of any input language")
+        let newPresentation = LoginInputSelection { inputSelections += 1 }
+        inputWindow.makeFirstResponder(nil); passwordField.selection = newPresentation
+        inputWindow.makeFirstResponder(passwordField)
+        check(inputSelections == 2, "a new login presentation permits exactly one new language selection")
+        check(LoginInputSelection.isEnglish(["en-GB"]) && LoginInputSelection.isEnglish(["en_US"])
+              && !LoginInputSelection.isEnglish(["ru", "en"]) && !LoginInputSelection.isEnglish([]),
+              "English selection follows the primary language and handles missing language metadata")
+        check(LoginInputSelection.preferredEnglishIndex(current: ["ru"], enabled: [["ru"], ["en-GB"], ["en-US"]]) == 1
+              && LoginInputSelection.preferredEnglishIndex(current: ["en-US"], enabled: [["en-GB"], ["en-US"]]) == nil,
+              "initial English choice preserves an existing English source and follows enabled source order")
+        check(LoginInputSelection.preferredEnglishIndex(current: ["ru"], enabled: [["ru"], ["fr"]]) == nil
+              && LoginInputSelection.preferredEnglishIndex(current: [], enabled: []) == nil,
+              "missing English or unavailable source metadata leaves the current input source unchanged")
+        inputWindow.makeFirstResponder(nil)
         let budgetWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
         let otherBudgetWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
         let settingsWindow = NSWindow(contentRect: .zero, styleMask: .titled, backing: .buffered, defer: false)
@@ -207,13 +281,24 @@ private struct Transport: AppUpdateTransport {
         let gate = try ReleaseGate()
         let updater = InstallUpdateManager(client: AppUpdateClient(transport: Transport(gate: gate)))
         updater.attach(model)
-        updater.check()
+        let startupBytes = try Data(contentsOf: model.vault.url)
+        updater.checkAtStartup()
         while !(await gate.waiting) { await Task.yield() }
+        for _ in 0..<10 { updater.attach(model); updater.checkAtStartup(); updater.check() }
+        let startupRequests = await gate.requests
+        check(startupRequests == 1 && updater.state == .checking && updater.sidebarTitle == nil,
+              "startup and concurrent manual checks share one request without a premature update button")
+        check(try Data(contentsOf: model.vault.url) == startupBytes && !model.updateFrozen,
+              "startup metadata checking does not write or freeze the budget")
         updater.cancel()
         check(updater.state == .cancelled, "cancel check")
         updater.check()
         try await wait { if case .available = updater.state { return true }; return false }
         check({ if case .available(let release) = updater.state { return release.manifest.version == "2.0.0" }; return false }(), "retry after cancellation")
+        updater.checkAtStartup(); updater.dismiss()
+        let requestsAfterStartup = await gate.requests
+        check(requestsAfterStartup == 2 && updater.sidebarTitle == "Обновить BeeSave",
+              "completed startup never repeats and closing an available update preserves its sidebar offer")
         let beforeLate = updater.state
         await gate.finishLate()
         try await Task.sleep(nanoseconds: 50_000_000)
@@ -225,6 +310,7 @@ private struct Transport: AppUpdateTransport {
         check(model.updateForms.contains(editor) && !model.updateFrozen && afterDraft == raw, "draft and budget preserved")
         updater.cancel(); model.updateForms.remove(editor)
         check(updater.state == .cancelled && updater.canTerminate(), "cancel waiting update has no installation on quit")
+        check(updater.sidebarTitle == nil, "cancelled installation cannot expose a stale installable sidebar offer")
         updater.check()
         try await wait { if case .available = updater.state { return true }; return false }
         let parent = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: .titled, backing: .buffered, defer: false)

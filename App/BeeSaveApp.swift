@@ -5,11 +5,26 @@ import BudgetPresentation
 @main struct BeeSaveApp: App {
     @NSApplicationDelegateAdaptor(ApplicationDelegate.self) private var applicationDelegate
     @StateObject private var model = AppModel()
-    @StateObject private var updater = InstallUpdateManager()
+    @StateObject private var updater = BeeSaveApp.makeUpdater()
+    private static func makeUpdater() -> InstallUpdateManager {
+        #if DEBUG && UI_SMOKE && STARTUP_UPDATE_QA
+        return InstallUpdateManager(client: AppUpdateClient(transport: AppearanceUpdateTransport()), version: "1.10.1", build: 20)
+        #else
+        #if DEBUG && UI_SMOKE
+        if ProcessInfo.processInfo.arguments.contains("--startup-update-qa") {
+            return InstallUpdateManager(client: AppUpdateClient(transport: AppearanceUpdateTransport()), version: "1.10.1", build: 20)
+        }
+        #endif
+        return InstallUpdateManager()
+        #endif
+    }
     var body: some Scene {
         Window("Вход в BeeSave", id: "access") {
             RootView(role: .access).environmentObject(model).beeAppearance()
-                .onAppear { updater.attach(model); applicationDelegate.updater = updater; applicationDelegate.model = model }
+                .onAppear {
+                    updater.attach(model); applicationDelegate.updater = updater; applicationDelegate.model = model
+                    updater.checkAtStartup()
+                }
         }
             .defaultSize(width: 420, height: 320)
             .defaultPosition(.center)
@@ -43,7 +58,7 @@ import BudgetPresentation
                 CommandGroup(after: .appSettings) { Button("Заблокировать") { model.lock() }.keyboardShortcut("l", modifiers: [.command, .shift]).disabled(model.db == nil) }
             }
         Window("BeeSave", id: "workspace") {
-            RootView(role: .workspace).environmentObject(model).beeAppearance()
+            RootView(role: .workspace).environmentObject(model).environmentObject(updater).beeAppearance()
                 .windowFullScreenBehavior(.enabled)
                 .windowResizeBehavior(.enabled)
         }.defaultSize(width: 1440, height: 900)

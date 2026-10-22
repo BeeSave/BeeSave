@@ -90,6 +90,8 @@ struct LoginView: View {
     @State private var newPassword = ""
     @State private var repeated = ""
     @State private var recovering = false
+    @State private var inputSelection = LoginInputSelection()
+    @State private var passwordFocused = true
     @FocusState private var focused: Bool
     private var scale: CGFloat { appearanceStore.preferences.scale }
     private var windowHeight: CGFloat {
@@ -111,8 +113,8 @@ struct LoginView: View {
                     FormField(title: "Повторите пароль") { SecureField("Введите ещё раз", text: $repeated).textFieldStyle(BeeTextFieldStyle()) }
                 } else {
                     FormField(title: "Пароль бюджета") {
-                        SecureField("Введите пароль", text: $password).textFieldStyle(BeeTextFieldStyle())
-                            .focused($focused).accessibilityIdentifier("access.password")
+                        LoginPasswordField(text: $password, focused: $passwordFocused,
+                                           selection: inputSelection, scale: scale, submit: submit)
                     }
                     if model.bootstrap?.password == nil {
                         Text("Восстановите доступ с помощью ключа, чтобы задать пароль.").beeFont(.caption).foregroundStyle(BeeStyle.muted)
@@ -133,13 +135,13 @@ struct LoginView: View {
                         .accessibilityIdentifier("access.unlock")
                 }
                 Button(recovering ? "Назад ко входу" : "Не получается войти?") {
-                    recovering.toggle(); model.error = nil; password = ""; recovery = ""; newPassword = ""; repeated = ""; focused = true
+                    recovering.toggle(); model.error = nil; password = ""; recovery = ""; newPassword = ""; repeated = ""; focused = true; passwordFocused = !recovering
                 }.buttonStyle(.borderless).beeFont(.caption)
                 if recovering { Button("Восстановить полную копию…") { model.sheet = SheetRoute(kind: .restore) }.buttonStyle(.borderless).beeFont(.caption) }
             }.padding(28).frame(maxWidth: .infinity, alignment: .leading)
         }.frame(width: min(420 * pow(scale, 0.6), (NSScreen.main?.visibleFrame.width ?? 900) - 48), height: windowHeight)
             .modifier(UpdateFormGuard(active: !password.isEmpty || !recovery.isEmpty || !newPassword.isEmpty || !repeated.isEmpty))
-            .onAppear { focused = true }
+            .onAppear { focused = true; passwordFocused = true }
             .onDisappear { password = ""; recovery = ""; newPassword = ""; repeated = "" }
     }
     private func submit() {

@@ -49,6 +49,7 @@ extension InstallUpdateManager {
     private weak var model: AppModel?
     private let client: AppUpdateClient
     private var checkTask: Task<Void, Never>?
+    private var startupCheckStarted = false
     private var prepareTask: Task<Void, Never>?
     private var cycle = UUID()
     private var selected: InstallUpdateRelease?
@@ -66,6 +67,22 @@ extension InstallUpdateManager {
         super.init()
     }
     private var safety: UpdateSafetyStore? { model.map { UpdateSafetyStore(directory: $0.root.appendingPathComponent("Updates.noindex")) } }
+
+    var sidebarTitle: String? {
+        switch state {
+        case .available: return "Обновить BeeSave"
+        case .checkingFeed, .downloading, .extracting, .waiting, .preparing, .installing, .cancelling: return "Обновление…"
+        default: return nil
+        }
+    }
+
+    func checkAtStartup() {
+        guard !startupCheckStarted else { return }
+        startupCheckStarted = true
+        // A manual check that already started also satisfies this launch's check.
+        guard state == .idle || budgetVerificationError != nil else { return }
+        check()
+    }
 
     func attach(_ model: AppModel) {
         guard self.model == nil else { return }
@@ -128,7 +145,7 @@ extension InstallUpdateManager {
     func check() {
         guard !state.isBusy, sparkle == nil, prepareTask == nil else { return }
         cycle = UUID(); let id = cycle
-        checkTask?.cancel(); state = .checking
+        checkTask?.cancel(); selected = nil; state = .checking
         let os = ProcessInfo.processInfo.operatingSystemVersion
         checkTask = Task { [weak self] in
             guard let self else { return }

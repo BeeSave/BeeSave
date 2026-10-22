@@ -5,6 +5,8 @@ import BudgetPresentation
 struct HomeView: View {
     @ObservedObject private var appearanceStore = AppearanceStore.shared
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var updater: InstallUpdateManager
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.beeAppearance) private var appearance
     var body: some View {
         NavigationSplitView {
@@ -21,6 +23,21 @@ struct HomeView: View {
                     Button { model.lock() } label: { Image(systemName: "lock") }
                         .help("Заблокировать бюджет · ⇧⌘L").accessibilityLabel("Заблокировать бюджет")
                 }.buttonStyle(.borderless).beeFont(.caption).padding(16)
+                if let title = updater.sidebarTitle {
+                    Button { openWindow(id: "app-update") } label: {
+                        Label(title, systemImage: "arrow.triangle.2.circlepath")
+                            .frame(maxWidth: .infinity, minHeight: 48 * appearance.scale)
+                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .buttonStyle(BeePrimaryStyle())
+                    .focusable()
+                    .onKeyPress(keys: [.space, .return]) { _ in
+                        openWindow(id: "app-update")
+                        return .handled
+                    }
+                    .accessibilityIdentifier("sidebar.update")
+                    .help("Открыть обновление BeeSave. Установка сохранит данные и перезапустит приложение.")
+                }
             }
             .background(BeeStyle.background)
             .clipped()

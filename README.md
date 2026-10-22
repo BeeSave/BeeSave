@@ -2,7 +2,9 @@
 
 Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-BeeSave 1.10.1 groups everyday tasks into Overview, Plan, Projects, Accounts, and Operations. The overview puts available funds, trends, and upcoming obligations first. Separate planning pages and project forms keep each task focused; Back restores your previous filters and position.
+BeeSave 1.11.0 groups everyday tasks into Overview, Plan, Projects, Accounts, and Operations. The overview puts available funds, trends, and upcoming obligations first. Separate planning pages and project forms keep each task focused; Back restores your previous filters and position.
+
+BeeSave checks for a compatible update when it starts. When one is available, a wide **Update BeeSave** button appears below Settings in the sidebar. Open it to review the version and start the existing update and restart process. Update checks never send your budget data to GitHub. The login password field initially selects an enabled English keyboard layout; you can switch to another language at any time afterward.
 
 Financial planning and projects cover regular income, living costs, obligations, savings, and major spending. Explore mortgage prepayments, renovation budgets, and small-business projects with local participants. Russian personal income tax and deduction estimates cover supported cases for 2025 and 2026.
 

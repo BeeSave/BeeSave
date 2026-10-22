@@ -9,6 +9,18 @@ private struct InstallReleaseFixture: AppUpdateTransport {
 }
 
 final class InstallUpdateReleaseTests: XCTestCase {
+    func testLiveStartupDiscoveryWithoutArchiveDownload() async throws {
+        guard ProcessInfo.processInfo.environment["BEESAVE_UPDATE_NETWORK"] == "1" else { throw XCTSkip("Separate opt-in GitHub metadata integration") }
+        let client = AppUpdateClient()
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let macOS = "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
+        guard case .available(let release) = try await client.checkInstall(version: "0", build: 0, macOS: macOS, architecture: "arm64") else {
+            return XCTFail("Expected compatible stable published metadata")
+        }
+        let current = try await client.checkInstall(version: release.manifest.version, build: release.manifest.build, macOS: macOS, architecture: "arm64")
+        XCTAssertEqual(current, .current)
+        print("LIVE startup metadata: stable compatible version=\(release.manifest.version) build=\(release.manifest.build); current-version discovery verified")
+    }
     private let names = ["latest.json", "BeeSave-macos-arm64.zip", "BeeSave-macos-arm64.zip.sha256", "BeeSave-macos-arm64.dmg", "BeeSave-macos-arm64.dmg.sha256", "appcast.xml"]
     private func fixture(assets: [String]? = nil, tag: String = "v1.2.0", manifestTag: String = "v1.2.0", draft: Bool = false, prerelease: Bool = false, foreign: Bool = false) throws -> InstallReleaseFixture {
         let prefix = "https://github.com/\(foreign ? "Other" : "BeeSave")/BeeSave/releases/download/\(tag)/"
