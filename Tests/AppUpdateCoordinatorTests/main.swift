@@ -2,6 +2,26 @@ import AppKit
 import BudgetCore
 import BudgetPresentation
 import Combine
+import SwiftUI
+
+@MainActor private final class PasswordTypingState: ObservableObject {
+    @Published var text = ""
+    @Published var focused = true
+    @Published var redraw = 0
+    @Published var scale: CGFloat = 1
+    let selection = LoginInputSelection(select: {})
+}
+
+private struct PasswordTypingView: View {
+    @ObservedObject var state: PasswordTypingState
+    var body: some View {
+        VStack {
+            LoginPasswordField(text: $state.text, focused: $state.focused,
+                               selection: state.selection, scale: state.scale, submit: {})
+            Text("\(state.redraw)")
+        }.padding()
+    }
+}
 
 private actor ReleaseGate {
     private var first: CheckedContinuation<Data, Never>?
@@ -84,6 +104,65 @@ private actor StartupTransport: AppUpdateTransport {
             let deadline = Date().addingTimeInterval(5)
             while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 5_000_000) }
         }
+        let typingState = PasswordTypingState()
+        let typingWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 160), styleMask: [.titled], backing: .buffered, defer: false)
+        let typingHost = NSHostingView(rootView: PasswordTypingView(state: typingState))
+        typingWindow.contentView = typingHost
+        typingHost.layoutSubtreeIfNeeded()
+        func findPassword(_ view: NSView) -> LoginPasswordField.PasswordField? {
+            if let field = view as? LoginPasswordField.PasswordField { return field }
+            return view.subviews.lazy.compactMap(findPassword).first
+        }
+        try await wait { findPassword(typingHost) != nil }
+        guard let typingField = findPassword(typingHost) else { fatalError("Missing hosted password field") }
+        typingWindow.makeFirstResponder(typingField)
+        try await wait { typingField.currentEditor() != nil }
+        guard let typingEditor = typingField.currentEditor() as? NSTextView else { fatalError("Missing native password editor") }
+        var typed = ""
+        for character in "Fictional123!" {
+            typed.append(character)
+            typingEditor.insertText(String(character), replacementRange: typingEditor.selectedRange())
+            try await Task.sleep(nanoseconds: 30_000_000)
+            if typingState.text != typed || typingField.stringValue != typed
+                || typingEditor.selectedRange() != NSRange(location: typed.utf16.count, length: 0) {
+                print("Typing diagnostics: expected count \(typed.utf16.count), binding count \(typingState.text.utf16.count), control count \(typingField.stringValue.utf16.count), selection \(typingEditor.selectedRange())")
+            }
+            check(typingState.text == typed && typingField.stringValue == typed
+                  && typingEditor.selectedRange() == NSRange(location: typed.utf16.count, length: 0),
+                  "hosted password typing preserves characters and caret after character \(typed.count)")
+        }
+        typingEditor.setSelectedRange(NSRange(location: 2, length: 4))
+        typingState.redraw += 1
+        try await Task.sleep(nanoseconds: 30_000_000)
+        check(typingEditor.selectedRange() == NSRange(location: 2, length: 4),
+              "unrelated SwiftUI redraw preserves a manually selected password range")
+        typingField.focusWhenAttached()
+        typingField.focusWhenAttached()
+        try await Task.sleep(nanoseconds: 30_000_000)
+        check(typingEditor.selectedRange() == NSRange(location: 2, length: 4),
+              "repeated deferred focus requests do not reselect an active password editor")
+        var edited = (typed as NSString).replacingCharacters(in: NSRange(location: 2, length: 4), with: "XY")
+        typingEditor.insertText("XY", replacementRange: typingEditor.selectedRange())
+        try await Task.sleep(nanoseconds: 30_000_000)
+        check(typingState.text == edited && typingEditor.selectedRange() == NSRange(location: 4, length: 0),
+              "replacing selected password characters retains the unselected text and caret")
+        typingEditor.moveLeft(nil)
+        typingEditor.deleteBackward(nil)
+        edited = (edited as NSString).replacingCharacters(in: NSRange(location: 2, length: 1), with: "")
+        try await Task.sleep(nanoseconds: 30_000_000)
+        check(typingState.text == edited && typingEditor.selectedRange() == NSRange(location: 2, length: 0),
+              "arrow and backspace edit the password at the native caret")
+        let unicode = "Вымышленный пароль 🔒 123"
+        typingEditor.selectAll(nil)
+        typingEditor.insertText(unicode, replacementRange: typingEditor.selectedRange())
+        try await Task.sleep(nanoseconds: 30_000_000)
+        check(typingState.text == unicode && typingEditor.selectedRange() == NSRange(location: unicode.utf16.count, length: 0),
+              "pasting Unicode into a selected password preserves text and UTF16 caret")
+        typingState.text = ""
+        try await Task.sleep(nanoseconds: 30_000_000)
+        check(typingField.stringValue.isEmpty && typingEditor.string.isEmpty,
+              "clearing the password binding clears the active secure editor")
+        typingWindow.makeFirstResponder(nil)
         var inputSelections = 0
         let inputSelection = LoginInputSelection { inputSelections += 1 }
         let inputWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 160), styleMask: .titled, backing: .buffered, defer: false)

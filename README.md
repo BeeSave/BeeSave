@@ -2,7 +2,7 @@
 
 Local-first budgeting and savings for Apple Silicon Macs running macOS 26.0 or later.
 
-BeeSave 1.11.0 groups everyday tasks into Overview, Plan, Projects, Accounts, and Operations. The overview puts available funds, trends, and upcoming obligations first. Separate planning pages and project forms keep each task focused; Back restores your previous filters and position.
+BeeSave 1.11.1 groups everyday tasks into Overview, Plan, Projects, Accounts, and Operations. The overview puts available funds, trends, and upcoming obligations first. Separate planning pages and project forms keep each task focused; Back restores your previous filters and position.
 
 BeeSave checks for a compatible update when it starts. When one is available, a wide **Update BeeSave** button appears below Settings in the sidebar. Open it to review the version and start the existing update and restart process. Update checks never send your budget data to GitHub. The login password field initially selects an enabled English keyboard layout; you can switch to another language at any time afterward.
 

@@ -62,9 +62,13 @@ struct LoginPasswordField: NSViewRepresentable {
     func updateNSView(_ field: PasswordField, context: Context) {
         context.coordinator.parent = self
         if field.stringValue != text { field.stringValue = text }
-        field.font = .systemFont(ofSize: 15 * scale)
-        field.textColor = NSColor(BeeStyle.text)
-        field.isEnabled = isEnabled
+        // AppKit can reset the secure editor's selection when its attributes are set.
+        // Binding changes must leave an already configured editor alone.
+        let font = NSFont.systemFont(ofSize: 15 * scale)
+        if field.font != font { field.font = font }
+        let color = NSColor(BeeStyle.text)
+        if field.textColor != color { field.textColor = color }
+        if field.isEnabled != isEnabled { field.isEnabled = isEnabled }
         field.wantsFocus = focused
         if focused && !context.coordinator.requestedFocus {
             field.focusWhenAttached()
@@ -92,7 +96,7 @@ struct LoginPasswordField: NSViewRepresentable {
         func focusWhenAttached() {
             guard wantsFocus, window != nil else { return }
             DispatchQueue.main.async { [weak self] in
-                guard let self, self.wantsFocus, self.isEnabled else { return }
+                guard let self, self.wantsFocus, self.isEnabled, self.currentEditor() == nil else { return }
                 self.window?.makeFirstResponder(self)
             }
         }
